@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Muzima</string>
-    <string name="title_activity_main">Muzima</string>
-    <string name="package_name">mz.org.csaude.communityintervention</string>
-    <string name="custom_url_scheme">mz.org.csaude.communityintervention</string>
-</resources>
