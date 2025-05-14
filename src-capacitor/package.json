@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@capacitor/android": "^6.2.0"
+  },
+  "name": "comVida",
+  "version": "1.0.0",
+  "description": "comVida Community Intervention App",
+  "author": "cSaúde (https://csaude.org.mz/)"
+}
