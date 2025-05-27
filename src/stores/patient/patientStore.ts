@@ -9,7 +9,7 @@ export const usePatientStore = defineStore('patient', {
   }),
   actions: {
     // Search patients and cache results
-    async searchPatients(search: string, index: number = 0) {
+    async searchPatients(search: string, index = 0) {
       try {
         // const results = await PatientService.searchPatients(search, index);
         // this.patients = results;
