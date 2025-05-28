@@ -60,6 +60,7 @@ module.exports = {
     'vue/no-mutating-props': 'off',
     'vue/no-template-shadow': 'off',
     'vue/multiline-html-element-content-newline': 'off',
+    'vue/attributes-order': 'off',
   },
 
 
