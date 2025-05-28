@@ -1,12 +1,24 @@
 <template>
   <div class="q-pa-md">
-    <q-table
-      :rows="uploads"
-      :columns="columns"
-      row-key="filename"
-      flat
-      dense
-    />
+    <q-card class="bg-white q-pa-none" flat bordered>
+      <q-card-section class="q-pa-none">
+        <q-banner dense inline-actions class="text-primary bg-grey-3  q-pa-none q-px-md q-py-xs">
+            <span class="text-weight-medium">Processamento de Listas Carregadas</span>
+        </q-banner>
+      </q-card-section>
+      <q-separator />
+      <q-card-section class="q-pa-none">
+        <q-table
+          :rows="uploads"
+          :columns="columns"
+          row-key="filename"
+          flat
+          dense
+          table-header-class="bg-grey-4 text-black"
+        />
+        </q-card-section>
+    </q-card>
+    
   </div>
 </template>
 
