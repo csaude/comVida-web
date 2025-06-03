@@ -2,7 +2,9 @@
   <q-card class="q-pa-none" flat bordered>
     <q-card-section class="text-h6 q-pa-none">
       <q-banner dense inline-actions class="text-primary bg-grey-3">
-        {{ title }}
+        <span class="text-subtitle2 text-primary">
+          {{ props.title }}
+        </span>
         <template #action>
             <q-input
                 outlined
