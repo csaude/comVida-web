@@ -1,16 +1,16 @@
 <template>
   <div>
-   
-
-    <q-card flat bordered class="q-mb-md">
-      <q-card-section>
-        <div class="text-subtitle1">Carregar Lista de Utentes</div>
-        <div class="text-caption text-grey-6">
-          Selecione o programa, serviço e grupo para carregar a lista de utentes.
-        </div>
+    <q-card flat bordered class="q-mb-md q-pa-none">
+      <q-card-section class="q-pa-none">
+        <q-banner dense inline-actions class="text-primary bg-grey-3  q-pa-none q-px-md q-py-xs">
+          <span class="text-weight-medium">Carregar Lista de Utentes para Seguimento Comunitário</span>
+        </q-banner>
       </q-card-section>
       <q-separator />
       <q-card-section>
+        <div class="text-caption text-grey-6 q-mb-md">
+          Selecione o programa, serviço e grupo para carregar a lista de utentes.
+        </div>
          <div class="row q-col-gutter-md q-mb-md items-center">
             <q-select
                 v-model="selectedProgram"

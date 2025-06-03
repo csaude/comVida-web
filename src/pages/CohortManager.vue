@@ -1,8 +1,8 @@
 <template>
-  <div class="q-pa-md">
+  <div class="q-pa-none">
     <q-tabs
       v-model="tab"
-      class="text-teal"
+      class="text-teal q-mx-md"
       dense
       active-color="primary"
       indicator-color="primary"
@@ -14,7 +14,7 @@
       <q-tab name="processamento" label="Processamento de Listas" />
     </q-tabs>
 
-    <q-separator />
+    <q-separator class="q-mx-md" />
 
     <q-tab-panels v-model="tab" animated>
       <q-tab-panel name="agendadas">
