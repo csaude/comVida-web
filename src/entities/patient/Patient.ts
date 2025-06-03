@@ -1,63 +1,65 @@
-import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
+import { Entity, Column } from 'typeorm'
+import { Person } from '../person/Person'
 
-@Entity('patient')
-export class Patient {
-  @PrimaryGeneratedColumn()
-  id!: number;
+@Entity('patients')
+export class Patient extends Person {
+  @Column('json', { name: 'patient_identifier', nullable: true })
+  patientIdentifier!: string | null
 
-  @Column('text', { nullable: true })
-  identifiers!: string | null;
-
-  @Column('text', { nullable: true })
-  tags!: string | null;
-
-  @Column('boolean', { nullable: true })
-  deletionStatus!: boolean | null;
-
-  @Column('integer')
-  personId!: number;
-
-  @Index()
-  @Column('text', { nullable: true })
-  personUuid!: string | null;
-
-  @Column('text', { nullable: true })
-  gender!: string | null;
-
-  @Column('date', { nullable: true })
-  birthdate!: Date | null;
-
-  @Column('boolean')
-  birthdateEstimated!: boolean;
-
-  @Column('text', { nullable: true })
-  names!: string | null;
-
-  @Column('text', { nullable: true })
-  attributes!: string | null;
-
-  @Column('text', { nullable: true })
-  addresses!: string | null;
-
-  @Column('boolean')
-  voided!: boolean;
-
-  @Column('text', { nullable: true })
-  personTags!: string | null;
-
-  @Column('text', { nullable: true })
-  uri!: string | null;
-
-  @Index()
-  @Column('text')
-  uuid!: string;
-
-  @Column('text')
-  cohort!: string;
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  status!: string | null
 
   constructor(init?: Partial<Patient>) {
+    super()
     if (init) {
-      Object.assign(this, init);
+      Object.assign(this, init)
+    }
+  }
+
+  static fromDTO(dto: any): Patient {
+    const entity = new Patient()
+
+    // Campos da BaseEntity + Person
+    if (dto.id !== undefined) entity.id = dto.id
+    if (dto.uuid !== undefined) entity.uuid = dto.uuid
+    if (dto.createdBy !== undefined) entity.createdBy = dto.createdBy
+    if (dto.createdAt !== undefined) entity.createdAt = new Date(dto.createdAt)
+    if (dto.updatedBy !== undefined) entity.updatedBy = dto.updatedBy
+    if (dto.updatedAt !== undefined) entity.updatedAt = new Date(dto.updatedAt)
+    if (dto.lifeCycleStatus !== undefined)
+      entity.lifeCycleStatus = dto.lifeCycleStatus
+
+    entity.names = dto.names ?? null
+    entity.sex = dto.sex ?? null
+    entity.birthdate = dto.birthdate ? new Date(dto.birthdate) : null
+    entity.address = dto.address ?? null
+    entity.personAttributes = dto.personAttributes ?? null
+
+    // Campos específicos do Patient
+    entity.patientIdentifier = dto.patientIdentifier ?? null
+    entity.status = dto.status ?? null
+
+    return entity
+  }
+
+  toDTO(): any {
+    return {
+      id: this.id,
+      uuid: this.uuid,
+      createdBy: this.createdBy,
+      createdAt: this.createdAt?.toISOString() ?? null,
+      updatedBy: this.updatedBy ?? null,
+      updatedAt: this.updatedAt?.toISOString() ?? null,
+      lifeCycleStatus: this.lifeCycleStatus,
+
+      names: this.names,
+      sex: this.sex,
+      birthdate: this.birthdate?.toISOString() ?? null,
+      address: this.address,
+      personAttributes: this.personAttributes,
+
+      patientIdentifier: this.patientIdentifier,
+      status: this.status,
     }
   }
 }

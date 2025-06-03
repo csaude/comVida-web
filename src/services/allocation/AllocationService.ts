@@ -9,21 +9,21 @@ export default {
       [key: string]: any
     } = {},
   ) {
-    const response = await api.get('/concepts', { params })
+    const response = await api.get('/allocations', { params })
     return response.data
   },
 
   async getById(id: number) {
-    const response = await api.get(`/concepts/${id}`)
+    const response = await api.get(`/allocations/${id}`)
     return response.data
   },
 
-  async save(data: any) {
-    const response = await api.post('/concepts', data)
+  async save(allocationData: any) {
+    const response = await api.post('/allocations', allocationData)
     return response.data
   },
 
   async delete(id: number) {
-    await api.delete(`/concepts/${id}`)
+    await api.delete(`/allocations/${id}`)
   },
 }
