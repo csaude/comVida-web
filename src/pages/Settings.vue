@@ -12,7 +12,11 @@
       <q-tab name="services" label="Serviços" />
       <q-tab name="groups" label="Grupos" />
       <q-tab name="cohorts" label="Coortes" />
+      <q-tab name="eligibility" label="Categorias de Elegibilidade" />
       <q-tab name="systems" label="Sistemas" />
+      <q-tab name="parameters" label="Parâmetros de Sistema" />
+
+
     </q-tabs>
 
     <q-separator class="q-mx-md" />
@@ -37,7 +41,19 @@
       <q-tab-panel name="systems">
         <SystemSettings />
       </q-tab-panel>
-    </q-tab-panels>
+
+      <q-tab-panel name="parameters">
+        <SystemParameterSettings />
+      </q-tab-panel>
+
+      <q-tab-panel name="eligibility">
+        <EligibilityCategorySettings />
+      </q-tab-panel>
+      </q-tab-panels>
+
+      
+
+
   </div>
 </template>
 
@@ -51,6 +67,10 @@ import ServiceSettings from '../components/settings/ServiceSettings.vue'
 import GroupSettings from '../components/settings/GroupSettings.vue'
 import CohortSettings from '../components/settings/CohortSettings.vue'
 import SystemSettings from '../components/settings/SystemSettings.vue'
+import SystemParameterSettings from '../components/settings/SystemParameterSettings.vue'
+import EligibilityCategorySettings from '../components/settings/EligibilityCategorySettings.vue'
+
+
 </script>
 
 <style scoped>

@@ -83,15 +83,7 @@ class PatientDAO {
   // Search for patients
   async search(criteria: string): Promise<Patient[]> {
     try {
-      return await this.patientRepo.find({
-        where: [
-          { identifiers: Like(`%${criteria}%`) },
-          { tags: Like(`%${criteria}%`) },
-          { names: Like(`%${criteria}%`) },
-          { attributes: Like(`%${criteria}%`) },
-        ],
-        order: { names: 'ASC' },
-      });
+      return this.getAll();
     } catch (error) {
       console.error('Error searching for patients:', error);
       throw new Error('Failed to search patients');

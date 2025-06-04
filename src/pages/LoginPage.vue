@@ -1,8 +1,5 @@
 <template>
   <div class="login-wrapper column full-width full-height q-pa-md bg-white items-center" style="padding-top: 5%;">
-    
-
-
     <div class="q-mt-xl q-pa-lg q-mt-xl items-center" style="max-width: 30%; width: 100%; text-align: center;">
       <div class="column items-center q-mb-lg">
         <q-img src="/comVida.png" style="width: 20%" />
@@ -17,13 +14,7 @@
         </template>
       </q-input>
 
-      <q-input
-        v-model="password"
-        label="Senha"
-        type="password"
-        class="q-mt-md"
-        outlined
-      >
+      <q-input v-model="password" label="Senha" type="password" class="q-mt-md" outlined>
         <template #prepend>
           <q-icon name="lock" />
         </template>
@@ -38,47 +29,55 @@
         color="primary"
         class="q-mt-lg q-px-lg"
         style="width: 35%;"
+        :loading="loading"
         @click="login"
       />
-
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useSwal } from 'src/composables/shared/dialog/dialog';
-import { useRouter } from 'vue-router';
+import { useRouter } from 'vue-router'
+import { useSwal } from 'src/composables/shared/dialog/dialog'
+import { useUserStore } from 'src/stores/user/userStore'
 
-// Dialogs
-const { alertError, alertWarning } = useSwal();
-const router = useRouter();
+const { alertError, alertWarning } = useSwal()
+const router = useRouter()
+const userStore = useUserStore()
 
-const server = ref('')
 const username = ref('')
 const password = ref('')
 const remember = ref(false)
+const loading = ref(false)
 
 onMounted(() => {
-  // Show privacy warning on mount
-  showPrivacyWarning();
-});
+  showPrivacyWarning()
+})
 
 const showPrivacyWarning = () => {
   alertWarning(
     'Ao acessar este sistema, você está prestes a visualizar informações altamente confidenciais de utentes. É sua responsabilidade protegê-las adequadamente e usá-las somente para os fins autorizados.'
-  );
-};
+  )
+}
 
-function login() {
-  console.log('Logging in with:', {
-    server: server.value,
-    username: username.value,
-    password: password.value,
-    remember: remember.value
-  })
-  router.push('/home');
-  // Implement real login logic here
+const login = async () => {
+  loading.value = true
+  try {
+    await userStore.login(username.value, password.value)
+
+    if (remember.value) {
+      localStorage.setItem('remembered_user', username.value)
+    } else {
+      localStorage.removeItem('remembered_user')
+    }
+
+    router.push('/home')
+  } catch (error) {
+    alertError('Não foi possível autenticar. Verifique as credenciais e tente novamente.')
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
