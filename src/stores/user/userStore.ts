@@ -13,13 +13,10 @@ export const useUserStore = defineStore('user', {
     // Login function
     async login(username: string, password: string) {
       try {
-        // Attempt login via UserService
-        const user = await UserService.login(username, password);
         
       
         this.isAuthenticated = true;
 
-        console.log('User logged in successfully:', user);
       } catch (error) {
         console.error('Login failed:', error);
         throw new Error('Login failed. Please check your credentials.');

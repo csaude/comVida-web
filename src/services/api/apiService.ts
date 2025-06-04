@@ -1,50 +1,67 @@
-import axios, { AxiosInstance, AxiosRequestHeaders } from 'axios';
-import EncryptionManager from 'src/utils/EncryptionManager';
+import axios, {
+  AxiosInstance,
+  AxiosHeaders,
+  InternalAxiosRequestConfig,
+  AxiosResponse,
+} from 'axios';
 
-// Function to encode credentials for Basic Authentication
-function getBasicAuthHeader(username: string, password: string): string {
-  const credentials = `${username}:${password}`;
-  return `Basic ${btoa(credentials)}`;
-}
-
-// Create Axios instance without baseURL (will be dynamically set)
+// Cria a instância Axios com baseURL fixa
 const instance: AxiosInstance = axios.create({
+  baseURL: 'http://localhost:8097/api',
   responseType: 'json',
   validateStatus(status) {
     return status >= 200 && status < 300;
   },
 });
 
-// Request interceptor to add dynamic baseURL and authorization headers
+// Função para fazer o logout
+function logout() {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('username');
+  localStorage.removeItem('userInfo');
+  localStorage.removeItem('tokenExpiration');
+  window.location.reload();
+}
+
+// Função para reiniciar o temporizador do token (15 minutos)
+function fixNextTokenExpirationTime() {
+  localStorage.setItem('tokenExpiration', String(Date.now() + 900000));
+}
+
+// Interceptor de requisição
 instance.interceptors.request.use(
-  (request) => {
-    // Retrieve facility from session storage
-    const facilityData = sessionStorage.getItem('selectedFacility');
-    const facility = facilityData ? JSON.parse(facilityData) : null;
+  (request: InternalAxiosRequestConfig) => {
+    const userInfo = localStorage.getItem('userInfo');
 
-    if (!facility || !facility.value.url) {
-      throw new Error('Facility URL not found in session storage.');
+    // Garante que headers seja uma instância de AxiosHeaders
+    if (!request.headers || !(request.headers instanceof AxiosHeaders)) {
+      request.headers = new AxiosHeaders();
     }
 
-    // Set dynamic baseURL
-    request.baseURL = `${facility.value.url}/ws/rest/v1`;
+    // Define o header Accept
+    request.headers.set('Accept', 'application/json');
 
-    if (request.url?.startsWith('http://') || request.url?.startsWith('https://')) {
-      // Do not modify the baseURL for full URLs
-      request.baseURL = '';
-    }
+    if (request.url === '/auth/refresh') {
+      request.headers.delete('Authorization');
+    } else if (userInfo && userInfo !== 'null') {
+      const tokenExpiration = localStorage.getItem('tokenExpiration');
+      const currentTime = Date.now();
 
-    // Retrieve and decrypt username and password
-    const username = EncryptionManager.getDecryptedSessionItem('username');
-    const password = EncryptionManager.getDecryptedSessionItem('password');
+      if (tokenExpiration && currentTime < Number(tokenExpiration)) {
+        fixNextTokenExpirationTime();
+      } else {
+        localStorage.setItem('tokenExpiration', '0');
+        logout();
+        return Promise.reject(new Error('Sessão expirada'));
+      }
 
-    if (username && password) {
-      // Add Authorization header for Basic Authentication
-      request.headers = {
-        ...request.headers,
-        Accept: 'application/json',
-        Authorization: getBasicAuthHeader(username, password),
-      } as AxiosRequestHeaders;
+      const authToken = localStorage.getItem('access_token');
+      if (authToken) {
+        request.headers.set('Authorization', `Bearer ${authToken}`);
+      }
+    } else {
+      request.headers.delete('Authorization');
     }
 
     return request;
@@ -52,15 +69,13 @@ instance.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle errors or session timeout
+// Interceptor de resposta (ex: token expirado)
 instance.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response: AxiosResponse) => response,
   (error) => {
     if (error.response?.status === 401) {
-      console.error('Unauthorized access - possibly due to expired credentials.');
-      // Handle unauthorized access, e.g., redirect to login or logout
+      console.error('Erro 401: não autorizado. Fazendo logout.');
+      logout();
     }
     return Promise.reject(error);
   }

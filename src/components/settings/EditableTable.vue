@@ -7,24 +7,26 @@
         </span>
         <template #action>
             <q-input
-                outlined
-                label="Pesquisar por Nome, descrição, Código"
-                dense
-                ref="recordCodeRef"
-                class="col"
-                style="width: 300px;"
-                v-model="searchParams"
-                @update:model-value="(value) => (filter = value)"
+              outlined
+              label="Pesquisar por Nome, descrição, Código"
+              dense
+              ref="recordCodeRef"
+              class="col"
+              style="width: 300px;"
+              v-model="searchParams"
+              @keyup.enter="search"
             >
-                <template #action:append>
-                    <q-icon
-                        name="close"
-                        @click="searchParams = ''"
-                        class="cursor-pointer"
-                    />
-                </template>
+              <template #append>
+                <q-icon
+                  v-if="searchParams"
+                  name="close"
+                  @click="searchParams = ''"
+                  class="cursor-pointer"
+                />
+              </template>
             </q-input>
-            <q-btn outline style="color: goldenrod;" dense icon="search" @click="searchUser" class="q-ml-sm">
+
+            <q-btn outline style="color: goldenrod;" dense icon="search" @click="search" class="q-ml-sm">
                 <q-tooltip class="bg-primary">Pesquisar</q-tooltip>
             </q-btn>
           <q-btn outline style="color: goldenrod;" dense icon="add" class="q-ml-sm" @click="addRow">
@@ -42,7 +44,11 @@
         flat
         dense
         separator="horizontal"
+        :pagination="props.pagination"
+        @update:pagination="(val) => emit('update:pagination', val)"
+        :rows-per-page-options="props.rowsPerPageOptions"
       >
+
         <template
           v-for="col in visibleColumns"
           :key="col.name"
@@ -124,10 +130,22 @@ const props = defineProps({
   modelValue: Array,
   columns: Array,
   programOptions: Array,
-  serviceOptions: Array
+  serviceOptions: Array,
+  loading: Boolean,
+  pagination: Object,
+  rowsPerPageOptions: Array
 })
 
-const emit = defineEmits(['update:modelValue'])
+const searchParams = ref('')
+
+const emit = defineEmits([
+  'update:modelValue',
+  'update:pagination',
+  'save',
+  'delete',
+  'search'
+])
+
 
 const rows = ref([...props.modelValue])
 watch(() => props.modelValue, val => { rows.value = [...val] })
@@ -155,6 +173,10 @@ const editRow = (row) => {
   editingRows.value.add(row)
 }
 
+const search = () => {
+  emit('search', searchParams.value.trim())
+}
+
 const cancelEdit = (row) => {
   Object.assign(row, row._backup)
   delete row._backup
@@ -165,11 +187,13 @@ const saveRow = (row) => {
   delete row._backup
   editingRows.value.delete(row)
   emit('update:modelValue', [...rows.value])
+  emit('save', row)
 }
 
 const deleteRow = (row) => {
   rows.value = rows.value.filter(r => r !== row)
   editingRows.value.delete(row)
   emit('update:modelValue', [...rows.value])
+  emit('delete', row)
 }
 </script>
