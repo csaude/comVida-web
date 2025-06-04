@@ -158,7 +158,7 @@ const visibleColumns = computed(() =>
 const isEditing = (row) => editingRows.value.has(row)
 
 const addRow = () => {
-  const newRow = { id: Date.now() }
+  const newRow = { _isNew: true }
   props.columns.forEach(col => {
     if (col.field !== 'actions') newRow[col.field] = ''
   })

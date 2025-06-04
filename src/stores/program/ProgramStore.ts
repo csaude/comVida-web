@@ -98,6 +98,9 @@ export const useProgramStore = defineStore('program', {
           programData instanceof Program
             ? programData.toDTO()
             : new Program(programData).toDTO()
+            
+console.log('Saving program with data:', dtoToSend)
+
 
         const savedDto = dtoToSend.id
           ? await ProgramService.update(dtoToSend)
