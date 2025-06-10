@@ -1,7 +1,13 @@
 import CryptoJS from 'crypto-js';
 
 class EncryptionManager {
-  private static ENCRYPTION_KEY = 'your-encryption-key'; // Replace with a secure key
+  private static get ENCRYPTION_KEY(): string {
+    const key = import.meta.env.VITE_ENCRYPTION_KEY
+    if (!key) {
+      throw new Error('Encryption key is not defined in environment variables.')
+    }
+    return key
+  }
 
   /**
    * Encrypts the given data using AES.
@@ -58,6 +64,36 @@ class EncryptionManager {
   static removeSessionItem(key: string): void {
     sessionStorage.removeItem(key);
   }
+
+  /**
+ * Sets a key-value pair in localStorage with encryption.
+ * @param key The key to use for storage.
+ * @param value The value to encrypt and store.
+ */
+static setEncryptedLocalItem(key: string, value: string): void {
+  const encryptedValue = this.encrypt(value)
+  localStorage.setItem(key, encryptedValue)
+}
+
+/**
+ * Retrieves and decrypts a value from localStorage.
+ * @param key The key to retrieve from storage.
+ * @returns The decrypted value or null if not found.
+ */
+static getDecryptedLocalItem(key: string): string | null {
+  const encryptedValue = localStorage.getItem(key)
+  if (!encryptedValue) return null
+  return this.decrypt(encryptedValue)
+}
+
+/**
+ * Removes a key from localStorage.
+ * @param key The key to remove.
+ */
+static removeLocalItem(key: string): void {
+  localStorage.removeItem(key)
+}
+
   
 }
 
