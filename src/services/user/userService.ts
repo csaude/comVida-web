@@ -8,10 +8,10 @@ interface LoginCredentials {
 }
 
 interface LoginResponse {
-  s_token: string
-  _type: string
-  es_in: number
-  ame: string
+  access_token: string
+  token_type: string
+  expires_in: number
+  username: string
 }
 
 class UserService {
@@ -23,9 +23,9 @@ class UserService {
       console.log('Login bem-sucedido:', data)
 
       // Salvar token e informações no localStorage
-      localStorage.setItem('access_token', data.s_token)
-      localStorage.setItem('token_type', data._type)
-      localStorage.setItem('tokenExpiration', String(Date.now() + data.es_in * 1000))
+      localStorage.setItem('access_token', data.access_token)
+      localStorage.setItem('token_type', data.token_type)
+      localStorage.setItem('tokenExpiration', String(Date.now() + data.expires_in * 1000))
 
       // Salvar nome de utilizador criptografado
       if (credentials.username) {
@@ -36,7 +36,7 @@ class UserService {
       }
 
       // Como não temos um objeto `User` completo, vamos salvar apenas o nome
-      EncryptionManager.setEncryptedLocalItem('userInfo', JSON.stringify({ name: data.ame }))
+      EncryptionManager.setEncryptedLocalItem('userInfo', JSON.stringify({ name: data.username }))
 
       return data
     } catch (error: any) {
@@ -44,6 +44,7 @@ class UserService {
       throw error
     }
   }
+
 
   logout() {
     localStorage.removeItem('access_token')

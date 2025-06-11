@@ -6,6 +6,9 @@ export class Program extends BaseEntity {
   @Column('text')
   name!: string
 
+  @Column('text', { nullable: true })
+  description!: string | null
+
   constructor(init?: Partial<Program>) {
     super()
     if (init) {
@@ -26,8 +29,9 @@ export class Program extends BaseEntity {
     if (dto.lifeCycleStatus !== undefined)
       entity.lifeCycleStatus = dto.lifeCycleStatus
 
-    // Campo específico do Program
+    // Campos específicos do Program
     entity.name = dto.name
+    entity.description = dto.description ?? null
 
     return entity
   }
@@ -43,6 +47,8 @@ export class Program extends BaseEntity {
       lifeCycleStatus: this.lifeCycleStatus,
 
       name: this.name,
+      description: this.description?.trim() || null
     }
   }
+
 }

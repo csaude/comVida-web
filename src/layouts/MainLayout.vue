@@ -145,26 +145,27 @@ const visibleMenuOptions = computed(() =>
 );
 
 const isMenuOptionVisible = menuOption => {
-  const userData = JSON.parse(localStorage.getItem('userData')) || {};
-  const roles = userData.roles || [];
+   return true;
+  // const userData = JSON.parse(localStorage.getItem('userData')) || {};
+  // const roles = userData.roles || [];
 
-  const rolePermissions = {
-    NATIONAL_ADMINISTRATOR: ['/home', '/cohorts', '/tracking', '/users', '/dashboard', '/rondas', '/settings'],
-    PROVINCIAL_ADMINISTRATOR: ['/home', '/tables', '/mentors', '/mentees', '/rondas', '/settings'],
-    DISTRICT_ADMINISTRATOR: ['/home', '/mentees', '/rondas', '/settings'],
-    NATIONAL_MENTOR: ['/home', '/reports', '/mentees'],
-    PROVINCIAL_MENTOR: ['/home', '/reports', '/mentees'],
-    DISTRICT_MENTOR: ['/home', '/reports', '/mentees'],
-    HEALTH_FACILITY_MENTOR: ['/home', '/mentees', '/resources', '/reports'],
-    MENTEE: ['/home', '/resources'],
-  };
+  // const rolePermissions = {
+  //   NATIONAL_ADMINISTRATOR: ['/home', '/cohorts', '/tracking', '/users', '/dashboard', '/rondas', '/settings'],
+  //   PROVINCIAL_ADMINISTRATOR: ['/home', '/tables', '/mentors', '/mentees', '/rondas', '/settings'],
+  //   DISTRICT_ADMINISTRATOR: ['/home', '/mentees', '/rondas', '/settings'],
+  //   NATIONAL_MENTOR: ['/home', '/reports', '/mentees'],
+  //   PROVINCIAL_MENTOR: ['/home', '/reports', '/mentees'],
+  //   DISTRICT_MENTOR: ['/home', '/reports', '/mentees'],
+  //   HEALTH_FACILITY_MENTOR: ['/home', '/mentees', '/resources', '/reports'],
+  //   MENTEE: ['/home', '/resources'],
+  // };
 
-  const allowedPaths = roles.reduce((paths, role) => {
-    const rolePaths = rolePermissions[role] || [];
-    return [...new Set([...paths, ...rolePaths])]; // Merge paths without duplicates
-  }, []);
+  // const allowedPaths = roles.reduce((paths, role) => {
+  //   const rolePaths = rolePermissions[role] || [];
+  //   return [...new Set([...paths, ...rolePaths])]; // Merge paths without duplicates
+  // }, []);
 
-  return allowedPaths.includes(menuOption);
+  // return allowedPaths.includes(menuOption);
 };
 
 const logout = () => {

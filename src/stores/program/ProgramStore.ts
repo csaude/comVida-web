@@ -27,7 +27,7 @@ export const useProgramStore = defineStore('program', {
             ignoreCache?: boolean
             [key: string]: any
         } = {}
-        ) {
+    ) {
         console.log('Fetching programs with params:', params)
 
         const page = params.page ?? 0
@@ -35,7 +35,6 @@ export const useProgramStore = defineStore('program', {
         const name = params.name ?? ''
         const ignoreCache = params.ignoreCache ?? false
 
-        // Usa cache só se NÃO estiver pesquisando (name vazio) E ignoreCache for false
         const isSearch = name.trim() !== ''
         const useCache = !ignoreCache && !isSearch
 
@@ -51,22 +50,22 @@ export const useProgramStore = defineStore('program', {
         try {
             const response = await ProgramService.getAll({ ...params, page, size, name })
 
-            const programs = response.content.map((dto: any) =>
-            Program.fromDTO(dto)
+            // Se response.content for undefined, use []
+            const programs = (response.content ?? []).map((dto: any) =>
+                Program.fromDTO(dto)
             )
 
-            // Atualiza cache apenas se não for busca
             if (!isSearch) {
-            this.programsPages[page] = programs
+                this.programsPages[page] = programs
             }
 
             this.currentPagePrograms = programs
 
             this.pagination = {
-            totalSize: response.totalSize,
-            totalPages: Math.ceil(response.totalSize / size),
-            currentPage: response.pageable.number,
-            pageSize: response.pageable.size
+                totalSize: response.total,
+                totalPages: Math.ceil(response.total / size),
+                currentPage: response.page,
+                pageSize: response.size
             }
         } catch (error: any) {
             this.error = 'Erro ao buscar programas'
@@ -74,8 +73,7 @@ export const useProgramStore = defineStore('program', {
         } finally {
             this.loading = false
         }
-    }
-,
+    },
 
     async getProgramDetails(id: number) {
       this.loading = true
@@ -98,9 +96,6 @@ export const useProgramStore = defineStore('program', {
           programData instanceof Program
             ? programData.toDTO()
             : new Program(programData).toDTO()
-            
-console.log('Saving program with data:', dtoToSend)
-
 
         const savedDto = dtoToSend.id
           ? await ProgramService.update(dtoToSend)
@@ -124,10 +119,44 @@ console.log('Saving program with data:', dtoToSend)
         this.currentProgram = saved
       } catch (error: any) {
         this.error = 'Erro ao salvar programa'
-        console.error(error)
+        console.error('Erro ao salvar programa:', error.response?.data || error.message || error)
+
+        throw error // 👈 IMPORTANTE → para o componente poder mostrar alertError
       }
     },
 
+    async updateProgramLifeCycleStatus(uuid: string, lifeCycleStatus: string) {
+      this.error = null
+      try {
+        const updatedDto = await ProgramService.updateLifeCycleStatus(uuid, lifeCycleStatus)
+        const updatedProgram = Program.fromDTO(updatedDto)
+
+        // Atualizar na cache:
+        for (const page in this.programsPages) {
+          const index = this.programsPages[page].findIndex(p => p.uuid === uuid)
+          if (index !== -1) {
+            this.programsPages[page][index] = updatedProgram
+          }
+        }
+
+        this.currentPagePrograms =
+          this.programsPages[this.pagination.currentPage] ?? []
+
+        if (this.currentProgram?.uuid === uuid) {
+          this.currentProgram = updatedProgram
+        }
+
+        return updatedProgram
+      } catch (error: any) {
+        this.error = 'Erro ao atualizar status do programa'
+        console.error(error)
+        throw error
+      }
+    }
+
+
+
+    ,
     async deleteProgram(uuid: string) {
       this.error = null
       try {

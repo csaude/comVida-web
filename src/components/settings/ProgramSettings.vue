@@ -2,6 +2,12 @@
 import { onMounted, computed, ref, watch } from 'vue'
 import { useProgramStore } from 'src/stores/program/ProgramStore'
 import EditableTable from './EditableTable.vue'
+import { useApiErrorHandler } from 'src/composables/shared/error/useApiErrorHandler'
+import { useSwal } from 'src/composables/shared/dialog/dialog'
+
+
+const { handleApiError } = useApiErrorHandler()
+const { alertWarningAction } = useSwal()
 
 // Store
 const programStore = useProgramStore()
@@ -20,6 +26,7 @@ const programs = computed({
 // Colunas exibidas na tabela
 const columns = [
   { name: 'name', label: 'Nome', align: 'left', field: 'name' },
+  { name: 'description', label: 'Descrição', align: 'left', field: 'description' },
   { name: 'actions', label: 'Opções', align: 'center' }
 ]
 
@@ -55,7 +62,6 @@ const pagination = ref({
 })
 
 // Sincroniza quando mudar a página ou quantidade por página
-// 📄 Ao mudar de página ou tamanho, usa cache se possível
 watch(
   () => [pagination.value.page, pagination.value.rowsPerPage],
   async ([page, size]) => {
@@ -71,7 +77,6 @@ watch(
   { immediate: true }
 )
 
-
 // Atualiza total ao buscar
 watch(
   () => programStore.pagination.totalSize,
@@ -79,6 +84,48 @@ watch(
     pagination.value.rowsNumber = total
   }
 )
+
+// Handler com try/catch para salvar
+const saveProgramHandler = async (programData: any) => {
+  try {
+    await programStore.saveProgram(programData)
+  } catch (err: any) {
+    handleApiError(err, 'Erro ao salvar programa')
+    throw err
+  }
+}
+
+// Handler com try/catch para apagar
+const deleteProgramHandler = async (uuid: string) => {
+  try {
+    await programStore.deleteProgram(uuid)
+  } catch (err: any) {
+    handleApiError(err, 'Erro ao apagar programa')
+    throw err
+  }
+}
+
+// Handler para ativar/desativar
+const toggleStatusHandler = async (row: any) => {
+  try {
+    const novoStatus = row.lifeCycleStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
+
+    const confirm = await alertWarningAction(
+      `Deseja realmente ${novoStatus === 'ACTIVE' ? 'ativar' : 'desativar'} este programa?`
+    )
+
+    if (!confirm) {
+      return
+    }
+    const updatedProgram = await programStore.updateProgramLifeCycleStatus(row.uuid, novoStatus)
+
+    row.lifeCycleStatus = updatedProgram.lifeCycleStatus
+  } catch (err: any) {
+    handleApiError(err, 'Erro ao atualizar estado do programa')
+  }
+}
+
+
 </script>
 
 <template>
@@ -89,9 +136,9 @@ watch(
     :loading="programStore.loading"
     v-model:pagination="pagination"
     :rows-per-page-options="[10, 20, 50, 100]"
-    @save="programStore.saveProgram"
-    @delete="(row) => programStore.deleteProgram(row.uuid)"
+    @save="(row, { resolve, reject }) => saveProgramHandler(row).then(resolve).catch(reject)"
+    @delete="(row, { resolve, reject }) => deleteProgramHandler(row.uuid).then(resolve).catch(reject)"
     @search="onSearch"
+    @toggle-status="toggleStatusHandler"
   />
-
 </template>
