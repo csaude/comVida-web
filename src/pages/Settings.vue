@@ -63,7 +63,7 @@ import { ref } from 'vue'
 const activeTab = ref('programs')
 
 import ProgramSettings from '../components/settings/ProgramSettings.vue'
-import ServiceSettings from '../components/settings/ServiceSettings.vue'
+import ServiceSettings from '../components/settings/ProgramActivitySettings.vue'
 import GroupSettings from '../components/settings/GroupSettings.vue'
 import CohortSettings from '../components/settings/CohortSettings.vue'
 import SystemSettings from '../components/settings/SystemSettings.vue'

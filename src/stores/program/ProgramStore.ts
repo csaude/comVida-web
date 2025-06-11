@@ -152,11 +152,7 @@ export const useProgramStore = defineStore('program', {
         console.error(error)
         throw error
       }
-    }
-
-
-
-    ,
+    },
     async deleteProgram(uuid: string) {
       this.error = null
       try {
@@ -175,9 +171,18 @@ export const useProgramStore = defineStore('program', {
           this.currentProgram = null
         }
       } catch (error: any) {
-        this.error = 'Erro ao apagar programa'
+        // Se a API retornar uma mensagem de erro, usa ela
+        const apiMessage =
+          error?.response?.data?.message || 'Erro ao apagar programa'
+
+        this.error = apiMessage
+
         console.error(error)
+
+        // Opcional: relança o erro para que o seu handleApiError no componente possa tratar
+        throw error
       }
     }
+
   }
 })
