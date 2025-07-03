@@ -23,6 +23,7 @@ module.exports = configure(function (/* ctx */) {
     boot: [
       'i18n',
       'axios',
+      'editable-table',
       //'periodic-task',
       //'database',
     ],
@@ -116,6 +117,7 @@ module.exports = configure(function (/* ctx */) {
       //
       // components: [],
       // directives: [],
+      importStrategy: 'auto', 
 
       // Quasar plugins
       plugins: []

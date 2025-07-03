@@ -1,6 +1,5 @@
 <script setup>
 import { ref } from 'vue'
-import EditableTable from './EditableTable.vue'
 
 // Lista de coortes com associação a serviço
 const cohorts = ref([

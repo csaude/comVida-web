@@ -1,25 +1,30 @@
 <script setup lang="ts">
 import { onMounted, computed, ref, watch } from 'vue'
 import { useProgramActivityStore } from 'src/stores/programActivity/ProgramActivityStore'
-import EditableTable from './EditableTable.vue'
 import { useApiErrorHandler } from 'src/composables/shared/error/useApiErrorHandler'
 import { useSwal } from 'src/composables/shared/dialog/dialog'
 import { useProgramStore } from 'src/stores/program/ProgramStore'
 import { Program } from 'src/entities/program/Program'
 
 const { handleApiError } = useApiErrorHandler()
-const { alertWarningAction } = useSwal()
-const programStore = useProgramStore()
+const { alertWarningAction, alertError } = useSwal()
 
-// Store
+const programStore = useProgramStore()
 const activityStore = useProgramActivityStore()
 
 const nameFilter = ref('')
 
-// Dados das atividades para o v-model da tabela
 const activities = computed({
-  get: () => activityStore.currentPageActivities,
+  get: () => activityStore.currentPageActivities.map(activity => ({
+    ...activity,
+    programId: activity.program?.id ?? null,
+    programName: activity.program?.name ?? ''
+  })),
   set: (val) => {
+    val.forEach(v => {
+      const program = programStore.currentPagePrograms.find(p => p.id === v.programId)
+      ;(v as any).program = program ?? null
+    })
     activityStore.activitiesPages[activityStore.pagination.currentPage] = val
     activityStore.currentPageActivities = val
   }
@@ -34,32 +39,47 @@ const programOptions = computed(() => {
     }))
 })
 
-
-// Colunas exibidas na tabela
 const columns = [
-  { name: 'name', label: 'Nome', align: 'left', field: 'name' },
-  { name: 'programId', label: 'Programa', align: 'left', field: 'programId' },
-  { name: 'actions', label: 'Opções', align: 'center' }
+  {
+    name: 'name',
+    label: 'Nome',
+    align: 'left',
+    field: 'name',
+    editType: 'text',
+    placeholder: 'Digite o nome da atividade'
+  },
+  {
+    name: 'programId',
+    label: 'Programa',
+    align: 'left',
+    field: 'programName',
+    editType: 'select',
+    editOptionsKey: 'programOptions',
+    editValueField: 'programId',
+    optionLabelKey: 'label',
+    optionValueKey: 'value',
+    placeholder: 'Selecione o programa'
+  },
+  {
+    name: 'actions',
+    label: 'Opções',
+    align: 'center'
+  }
 ]
 
-// Buscar atividades ao montar o componente
 onMounted(async () => {
   if (activityStore.currentPageActivities.length === 0) {
     activityStore.fetchActivities()
   }
 
   if (programStore.currentPagePrograms.length === 0) {
-    await programStore.fetchPrograms({
-      page: 0,
-      size: 100 // pode ajustar conforme necessidade
-    })
+    await programStore.fetchPrograms({ page: 0, size: 100 })
   }
 })
 
-// 🔍 Ao pesquisar, forçar API (ignora cache)
 const onSearch = async (name: string) => {
   nameFilter.value = name
-  pagination.value.page = 1 // sempre volta para a primeira página ao pesquisar
+  pagination.value.page = 1
 
   await activityStore.fetchActivities({
     page: 0,
@@ -71,7 +91,6 @@ const onSearch = async (name: string) => {
   pagination.value.rowsNumber = activityStore.pagination.totalSize
 }
 
-// Paginação usada pela <q-table>
 const pagination = ref({
   sortBy: 'id',
   descending: false,
@@ -80,7 +99,6 @@ const pagination = ref({
   rowsNumber: 0
 })
 
-// Sincroniza quando mudar a página ou quantidade por página
 watch(
   () => [pagination.value.page, pagination.value.rowsPerPage],
   async ([page, size]) => {
@@ -90,13 +108,11 @@ watch(
       name: nameFilter.value,
       ignoreCache: false
     })
-
     pagination.value.rowsNumber = activityStore.pagination.totalSize
   },
   { immediate: true }
 )
 
-// Atualiza total ao buscar
 watch(
   () => activityStore.pagination.totalSize,
   (total) => {
@@ -104,18 +120,14 @@ watch(
   }
 )
 
-// Handler com try/catch para salvar
 const saveActivityHandler = async (activityData: any) => {
   try {
-
-    // Monta o campo program como instância de Program
     const selectedProgram = programStore.currentPagePrograms.find(p => p.id === activityData.programId)
 
     if (!selectedProgram) {
       throw new Error(`Programa com ID ${activityData.programId} não encontrado.`)
     }
 
-    // Monta o payload com program como instância
     const payloadToSave = {
       ...activityData,
       program: new Program({
@@ -126,18 +138,16 @@ const saveActivityHandler = async (activityData: any) => {
 
     delete payloadToSave.undefined
     delete payloadToSave._backup
-    
+
     const saved = await activityStore.saveActivity(payloadToSave)
     saved.program = selectedProgram
-    return saved 
+    return saved
   } catch (err: any) {
     handleApiError(err, 'Erro ao salvar atividade')
     throw err
   }
 }
 
-
-// Handler com try/catch para apagar
 const deleteActivityHandler = async (uuid: string) => {
   try {
     await activityStore.deleteActivity(uuid)
@@ -147,7 +157,6 @@ const deleteActivityHandler = async (uuid: string) => {
   }
 }
 
-// Handler para ativar/desativar
 const toggleStatusHandler = async (row: any) => {
   try {
     const novoStatus = row.lifeCycleStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
@@ -156,12 +165,9 @@ const toggleStatusHandler = async (row: any) => {
       `Deseja realmente ${novoStatus === 'ACTIVE' ? 'ativar' : 'desativar'} esta atividade?`
     )
 
-    if (!confirm) {
-      return
-    }
+    if (!confirm) return
 
     const updatedActivity = await activityStore.updateActivityLifeCycleStatus(row.uuid, novoStatus)
-
     row.lifeCycleStatus = updatedActivity.lifeCycleStatus
   } catch (err: any) {
     handleApiError(err, 'Erro ao atualizar estado da atividade')
@@ -177,6 +183,8 @@ const toggleStatusHandler = async (row: any) => {
     :loading="activityStore.loading"
     v-model:pagination="pagination"
     :program-options="programOptions"
+    :confirm-error="alertError"
+    :confirm-delete="alertWarningAction"
     :rows-per-page-options="[10, 20, 50, 100]"
     @save="(row, { resolve, reject }) => saveActivityHandler(row).then(resolve).catch(reject)"
     @delete="(row, { resolve, reject }) => deleteActivityHandler(row.uuid).then(resolve).catch(reject)"
