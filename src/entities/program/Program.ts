@@ -40,10 +40,6 @@ export class Program extends BaseEntity {
     return {
       id: this.id,
       uuid: this.uuid,
-      createdBy: this.createdBy,
-      createdAt: this.createdAt?.toISOString() ?? null,
-      updatedBy: this.updatedBy ?? null,
-      updatedAt: this.updatedAt?.toISOString() ?? null,
       lifeCycleStatus: this.lifeCycleStatus,
 
       name: this.name,
