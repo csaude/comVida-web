@@ -10,7 +10,6 @@
 
 <script setup>
 import { ref } from 'vue'
-import EditableTable from './EditableTable.vue'
 
 const categories = ref([
   {

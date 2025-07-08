@@ -1,6 +1,5 @@
 <script setup>
 import { ref } from 'vue'
-import EditableTable from './EditableTable.vue'
 
 const systems = ref([
   { id: 1, name: 'SIS-RME', description: 'Sistema nacional de informação', type: 'Nacional', url: 'sisrme.misau.gov' },
