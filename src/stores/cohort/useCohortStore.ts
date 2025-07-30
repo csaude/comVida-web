@@ -15,23 +15,26 @@ export const useCohortStore = defineStore('cohort', {
       totalSize: 0,
       totalPages: 0,
       currentPage: 0,
-      pageSize: 10
-    }
+      pageSize: 500,
+    },
   }),
 
   actions: {
-    async fetchCohorts(params: {
-      page?: number
-      size?: number
-      sort?: string
-      name?: string
-      ignoreCache?: boolean
-      [key: string]: any
-    } = {}) {
+    async cohortsWithMembers(
+      params: {
+        page?: number
+        size?: number
+        sort?: string
+        name?: string
+        ignoreCache?: boolean
+        [key: string]: any
+      } = {},
+    ) {
       const name = params.name?.trim() || null
       const ignoreCache = params.ignoreCache ?? false
       const isSearch = typeof name === 'string' && name.trim() !== ''
-      const usePagination = params.page !== undefined || params.size !== undefined
+      const usePagination =
+        params.page !== undefined || params.size !== undefined
       const useCache = !ignoreCache && !isSearch && usePagination
 
       const defaultSize = this.pagination.pageSize
@@ -48,30 +51,116 @@ export const useCohortStore = defineStore('cohort', {
       this.error = null
 
       try {
-        const response = await CohortService.getAll({ ...params, page, size, name: name !== null ? name : 'null' })
-        const cohorts = (response.content ?? []).map((dto: any) =>
-          Cohort.fromDTO(dto)
+        const response = await CohortService.cohortsWithMembers({
+          ...params,
+          page,
+          size,
+          name: name !== null ? name : 'null', // caso o backend aceite isso
+        })
+
+        const cohorts = (response.content ?? response ?? []).map((dto: any) =>
+          Cohort.fromDTO(dto),
         )
 
-        if (!usePagination) {
-          const paged = paginateArray(cohorts, defaultSize) as Record<number, Cohort[]>
+        if (!usePagination || !response?.total) {
+          // fallback caso backend não tenha paginação implementada ainda
+          const paged = paginateArray(cohorts, defaultSize) as Record<
+            number,
+            Cohort[]
+          >
           this.cohortsPages = paged
           this.currentPageCohorts = paged[0] ?? []
           this.pagination = {
             totalSize: cohorts.length,
             totalPages: Object.keys(paged).length,
             currentPage: 0,
-            pageSize: defaultSize
+            pageSize: defaultSize,
           }
-        }
-          else {
+        } else {
           this.cohortsPages[page] = cohorts
           this.currentPageCohorts = cohorts
           this.pagination = {
             totalSize: response.total,
             totalPages: Math.ceil(response.total / size),
             currentPage: response.page,
-            pageSize: response.size
+            pageSize: response.size,
+          }
+        }
+
+        return cohorts
+      } catch (error: any) {
+        this.error = 'Erro ao buscar cohorts com membros'
+        console.error(error)
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async fetchCohorts(
+      params: {
+        page?: number
+        size?: number
+        sort?: string
+        name?: string
+        ignoreCache?: boolean
+        [key: string]: any
+      } = {},
+    ) {
+      console.log('Fetching cohorts with params:', params)
+      const name = params.name?.trim() || null
+      const ignoreCache = params.ignoreCache ?? false
+      const isSearch = typeof name === 'string' && name.trim() !== ''
+      const usePagination =
+        params.page !== undefined || params.size !== undefined
+      const useCache = !ignoreCache && !isSearch && usePagination
+
+      const defaultSize = this.pagination.pageSize
+      const page = params.page ?? 0
+      const size = params.size ?? defaultSize
+
+      if (useCache && this.cohortsPages[page]) {
+        this.currentPageCohorts = this.cohortsPages[page]
+        this.pagination.currentPage = page
+        return
+      }
+
+      this.loading = true
+      this.error = null
+
+      try {
+        console.log('Fetching cohorts with params:', params)
+        const response = await CohortService.getAll({
+          ...params,
+          page,
+          size,
+          name: name !== null ? name : 'null',
+        })
+        const cohorts = (response.content ?? []).map((dto: any) =>
+          Cohort.fromDTO(dto),
+        )
+
+        if (!usePagination) {
+          const paged = paginateArray(cohorts, defaultSize) as Record<
+            number,
+            Cohort[]
+          >
+          this.cohortsPages = paged
+          this.currentPageCohorts = paged[0] ?? []
+          this.pagination = {
+            totalSize: cohorts.length,
+            totalPages: Object.keys(paged).length,
+            currentPage: 0,
+            pageSize: defaultSize,
+          }
+        } else {
+          this.cohortsPages[page] = cohorts
+          this.currentPageCohorts = cohorts
+          this.pagination = {
+            totalSize: response.total,
+            totalPages: Math.ceil(response.total / size),
+            currentPage: response.page,
+            pageSize: response.size,
           }
         }
       } catch (error: any) {
@@ -103,7 +192,8 @@ export const useCohortStore = defineStore('cohort', {
     async saveCohort(cohortData: Partial<Cohort>) {
       this.error = null
       try {
-        const cohort = cohortData instanceof Cohort ? cohortData : new Cohort(cohortData)
+        const cohort =
+          cohortData instanceof Cohort ? cohortData : new Cohort(cohortData)
         const dtoToSend = cohort.toDTO()
 
         console.log('Saving cohort with DTO:', dtoToSend)
@@ -118,7 +208,11 @@ export const useCohortStore = defineStore('cohort', {
           this.cohortsPages[page] = []
         }
 
-        this.cohortsPages[page] = replaceOrInsert(this.cohortsPages[page], saved, 'name')
+        this.cohortsPages[page] = replaceOrInsert(
+          this.cohortsPages[page],
+          saved,
+          'name',
+        )
         this.currentPageCohorts = [...this.cohortsPages[page]]
         this.currentCohort = saved
 
@@ -133,17 +227,23 @@ export const useCohortStore = defineStore('cohort', {
     async updateCohortLifeCycleStatus(uuid: string, lifeCycleStatus: string) {
       this.error = null
       try {
-        const updatedDto = await CohortService.updateLifeCycleStatus(uuid, lifeCycleStatus)
+        const updatedDto = await CohortService.updateLifeCycleStatus(
+          uuid,
+          lifeCycleStatus,
+        )
         const updatedCohort = Cohort.fromDTO(updatedDto)
 
         for (const page in this.cohortsPages) {
-          const index = this.cohortsPages[page].findIndex(c => c.uuid === uuid)
+          const index = this.cohortsPages[page].findIndex(
+            (c) => c.uuid === uuid,
+          )
           if (index !== -1) {
             this.cohortsPages[page][index] = updatedCohort
           }
         }
 
-        this.currentPageCohorts = this.cohortsPages[this.pagination.currentPage] ?? []
+        this.currentPageCohorts =
+          this.cohortsPages[this.pagination.currentPage] ?? []
 
         if (this.currentCohort?.uuid === uuid) {
           this.currentCohort = updatedCohort
@@ -163,10 +263,13 @@ export const useCohortStore = defineStore('cohort', {
         await CohortService.delete(uuid)
 
         for (const page in this.cohortsPages) {
-          this.cohortsPages[page] = this.cohortsPages[page].filter(c => c.uuid !== uuid)
+          this.cohortsPages[page] = this.cohortsPages[page].filter(
+            (c) => c.uuid !== uuid,
+          )
         }
 
-        this.currentPageCohorts = this.cohortsPages[this.pagination.currentPage] ?? []
+        this.currentPageCohorts =
+          this.cohortsPages[this.pagination.currentPage] ?? []
 
         if (this.currentCohort?.uuid === uuid) {
           this.currentCohort = null
@@ -178,6 +281,6 @@ export const useCohortStore = defineStore('cohort', {
         console.error(error)
         throw error
       }
-    }
-  }
+    },
+  },
 })

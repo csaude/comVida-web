@@ -1,66 +1,71 @@
-import DatabaseManager from 'src/services/db/DatabaseManager';
-import { EligibilityCategory } from 'src/entities/eligibility/EligibilityCategory';
-import { Repository, Like } from 'typeorm';
+import DatabaseManager from 'src/services/db/DatabaseManager'
+import { EligibilityCriteria } from 'src/entities/eligibility/EligibilityCriteria'
+import { Repository, Like } from 'typeorm'
 
-class EligibilityCategoryDAO {
-  private eligibilityCategoryRepo: Repository<EligibilityCategory>;
+class EligibilityCriteriaDAO {
+  private eligibilityCriteriaRepo: Repository<EligibilityCriteria>
 
   constructor() {
-    const dataSource = DatabaseManager.getInstance().getDataSource();
-    this.eligibilityCategoryRepo = dataSource.getRepository(EligibilityCategory);
+    const dataSource = DatabaseManager.getInstance().getDataSource()
+    this.eligibilityCriteriaRepo = dataSource.getRepository(EligibilityCriteria)
   }
 
-  // Criar uma nova EligibilityCategory
-  async create(categoryData: Partial<EligibilityCategory>): Promise<EligibilityCategory> {
-    const category = this.eligibilityCategoryRepo.create(categoryData);
-    return await this.eligibilityCategoryRepo.save(category);
+  // Criar uma nova EligibilityCriteria
+  async create(
+    categoryData: Partial<EligibilityCriteria>,
+  ): Promise<EligibilityCriteria> {
+    const category = this.eligibilityCriteriaRepo.create(categoryData)
+    return await this.eligibilityCriteriaRepo.save(category)
   }
 
   // Obter todas as EligibilityCategories
-  async getAll(): Promise<EligibilityCategory[]> {
-    return await this.eligibilityCategoryRepo.find();
+  async getAll(): Promise<EligibilityCriteria[]> {
+    return await this.eligibilityCriteriaRepo.find()
   }
 
-  // Obter uma EligibilityCategory por ID
-  async getById(id: number): Promise<EligibilityCategory | null> {
-    return await this.eligibilityCategoryRepo.findOneBy({ id });
+  // Obter uma EligibilityCriteria por ID
+  async getById(id: number): Promise<EligibilityCriteria | null> {
+    return await this.eligibilityCriteriaRepo.findOneBy({ id })
   }
 
-  // Atualizar uma EligibilityCategory
-  async update(id: number, updateData: Partial<EligibilityCategory>): Promise<EligibilityCategory> {
-    const category = await this.eligibilityCategoryRepo.findOneBy({ id });
+  // Atualizar uma EligibilityCriteria
+  async update(
+    id: number,
+    updateData: Partial<EligibilityCriteria>,
+  ): Promise<EligibilityCriteria> {
+    const category = await this.eligibilityCriteriaRepo.findOneBy({ id })
 
     if (!category) {
-      throw new Error('EligibilityCategory not found');
+      throw new Error('EligibilityCriteria not found')
     }
 
-    Object.assign(category, updateData);
-    return await this.eligibilityCategoryRepo.save(category);
+    Object.assign(category, updateData)
+    return await this.eligibilityCriteriaRepo.save(category)
   }
 
-  // Deletar uma EligibilityCategory
+  // Deletar uma EligibilityCriteria
   async delete(id: number): Promise<void> {
-    const category = await this.eligibilityCategoryRepo.findOneBy({ id });
+    const category = await this.eligibilityCriteriaRepo.findOneBy({ id })
 
     if (!category) {
-      throw new Error('EligibilityCategory not found');
+      throw new Error('EligibilityCriteria not found')
     }
 
-    await this.eligibilityCategoryRepo.remove(category);
+    await this.eligibilityCriteriaRepo.remove(category)
   }
 
   // Buscar EligibilityCategories por descrição
-  async search(criteria: string): Promise<EligibilityCategory[]> {
+  async search(criteria: string): Promise<EligibilityCriteria[]> {
     try {
-      return await this.eligibilityCategoryRepo.find({
+      return await this.eligibilityCriteriaRepo.find({
         where: { description: Like(`%${criteria}%`) },
         order: { description: 'ASC' }, // Ordenar alfabeticamente pela descrição
-      });
+      })
     } catch (error) {
-      console.error('Error searching for eligibility categories:', error);
-      throw new Error('Failed to search eligibility categories');
+      console.error('Error searching for eligibility categories:', error)
+      throw new Error('Failed to search eligibility categories')
     }
   }
 }
 
-export default new EligibilityCategoryDAO();
+export default new EligibilityCriteriaDAO()

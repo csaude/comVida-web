@@ -8,9 +8,23 @@ export default {
       sort?: string
       name?: string
       [key: string]: any
-    } = {}
+    } = {},
   ) {
+    console.log('params', params)
     const response = await api.get('/cohorts', { params })
+    return response.data
+  },
+
+  async cohortsWithMembers(
+    params: {
+      page?: number
+      size?: number
+      sort?: string
+      servico?: number | string
+      [key: string]: any
+    } = {},
+  ) {
+    const response = await api.get('/cohorts/with-members', { params })
     return response.data
   },
 
@@ -24,7 +38,10 @@ export default {
       const response = await api.post('/cohorts', data)
       return response.data.data
     } catch (error: any) {
-      console.error('Erro na API ao salvar cohort:', error.response?.data || error.message || error)
+      console.error(
+        'Erro na API ao salvar cohort:',
+        error.response?.data || error.message || error,
+      )
       throw error
     }
   },
@@ -34,7 +51,10 @@ export default {
       const response = await api.put('/cohorts', data)
       return response.data.data
     } catch (error: any) {
-      console.error('Erro na API ao atualizar cohort:', error.response?.data || error.message || error)
+      console.error(
+        'Erro na API ao atualizar cohort:',
+        error.response?.data || error.message || error,
+      )
       throw error
     }
   },
@@ -43,18 +63,26 @@ export default {
     try {
       await api.delete(`/cohorts/${uuid}`)
     } catch (error: any) {
-      console.error('Erro na API ao apagar cohort:', error.response?.data || error.message || error)
+      console.error(
+        'Erro na API ao apagar cohort:',
+        error.response?.data || error.message || error,
+      )
       throw error
     }
   },
 
   async updateLifeCycleStatus(uuid: string, lifeCycleStatus: string) {
     try {
-      const response = await api.put(`/cohorts/${uuid}/status`, { lifeCycleStatus })
+      const response = await api.put(`/cohorts/${uuid}/status`, {
+        lifeCycleStatus,
+      })
       return response.data.data
     } catch (error: any) {
-      console.error('Erro na API ao atualizar status do cohort:', error.response?.data || error.message || error)
+      console.error(
+        'Erro na API ao atualizar status do cohort:',
+        error.response?.data || error.message || error,
+      )
       throw error
     }
-  }
+  },
 }
