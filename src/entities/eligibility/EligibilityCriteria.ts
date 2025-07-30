@@ -2,10 +2,10 @@ import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm'
 import { BaseEntity } from '../base/BaseEntity'
 import { ProgramActivity } from '../programActivity/ProgramActivity'
 
-@Entity('cohort')
-export class Cohort extends BaseEntity {
+@Entity('eligibility_criteria')
+export class EligibilityCriteria extends BaseEntity {
   @Column('text')
-  name!: string
+  criteria!: string
 
   @Column('text', { nullable: true })
   description!: string | null
@@ -14,35 +14,17 @@ export class Cohort extends BaseEntity {
   @JoinColumn({ name: 'program_activity_id' })
   programActivity!: ProgramActivity
 
-  @Column('timestamp', { nullable: true })
-  inclusionDate?: Date
-
-  @Column('timestamp', { nullable: true })
-  exclusionDate?: Date
-
-  @Column('timestamp', { nullable: true })
-  memberCreatedAt?: Date
-
-  programActivityName?: string
-
-  constructor(init?: Partial<Cohort>) {
+  constructor(init?: Partial<EligibilityCriteria>) {
     super()
     if (init) {
       Object.assign(this, init)
-
-      if (
-        init.programActivity &&
-        !(init.programActivity instanceof ProgramActivity)
-      ) {
-        this.programActivity = ProgramActivity.fromDTO(init.programActivity)
-      }
     }
   }
 
-  static fromDTO(dto: any): Cohort {
-    const entity = new Cohort()
+  static fromDTO(dto: any): EligibilityCriteria {
+    const entity = new EligibilityCriteria()
 
-    // BaseEntity fields
+    // BaseEntity
     if (dto.id !== undefined) entity.id = dto.id
     if (dto.uuid !== undefined) entity.uuid = dto.uuid
     if (dto.createdBy !== undefined) entity.createdBy = dto.createdBy
@@ -52,24 +34,14 @@ export class Cohort extends BaseEntity {
     if (dto.lifeCycleStatus !== undefined)
       entity.lifeCycleStatus = dto.lifeCycleStatus
 
-    if (dto.inclusionDate !== undefined)
-      entity.inclusionDate = new Date(dto.inclusionDate)
-
-    if (dto.exclusionDate !== undefined)
-      entity.exclusionDate = new Date(dto.exclusionDate)
-
-    if (dto.memberCreatedAt !== undefined)
-      entity.memberCreatedAt = new Date(dto.memberCreatedAt)
-
-    // Specific fields
-    entity.name = dto.name
+    // Campos específicos
+    entity.criteria = dto.criteria
     entity.description = dto.description ?? null
 
+    // Relacionamento
     if (dto.programActivity) {
       entity.programActivity = ProgramActivity.fromDTO(dto.programActivity)
     }
-
-    entity.programActivityName = dto.programActivity?.name
 
     return entity
   }
@@ -79,11 +51,15 @@ export class Cohort extends BaseEntity {
       id: this.id,
       uuid: this.uuid,
       lifeCycleStatus: this.lifeCycleStatus,
+      createdBy: this.createdBy,
+      createdAt: this.createdAt?.toISOString(),
+      updatedBy: this.updatedBy,
+      updatedAt: this.updatedAt?.toISOString(),
 
-      name: this.name,
-      description: this.description,
-      programActivity: this.programActivity?.toDTO() ?? null,
-      programActivityName: this.programActivity?.name ?? null,
+      criteria: this.criteria,
+      description: this.description?.trim() || null,
+
+      programActivity: this.programActivity?.toDTO(),
     }
   }
 }

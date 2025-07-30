@@ -4,29 +4,29 @@ import {
   PrimaryGeneratedColumn,
   JoinColumn,
   Column,
-} from 'typeorm';
-import { Patient } from 'src/entities/patient/Patient'; // Importa a entidade Patient
-import { EligibilityCategory } from './EligibilityCategory';
+} from 'typeorm'
+import { Patient } from 'src/entities/patient/Patient' // Importa a entidade Patient
+import { EligibilityCriteria } from './EligibilityCriteria'
 
 @Entity('eligibility_category_patient') // Mapeia esta classe para a tabela "eligibility_category_patient"
 export class EligibilityCategoryPatient {
   @PrimaryGeneratedColumn()
-  id!: number;
+  id!: number
 
   @ManyToOne(() => Patient)
   @JoinColumn({ name: 'patient_id' })
-  patient!: Patient;
+  patient!: Patient
 
-  @ManyToOne(() => EligibilityCategory)
+  @ManyToOne(() => EligibilityCriteria)
   @JoinColumn({ name: 'category_id' })
-  category!: EligibilityCategory;
+  category!: EligibilityCriteria
 
   @Column('timestamp', { default: () => 'CURRENT_TIMESTAMP' })
-  creationDate!: Date;
+  creationDate!: Date
 
   constructor(init?: Partial<EligibilityCategoryPatient>) {
     if (init) {
-      Object.assign(this, init);
+      Object.assign(this, init)
     }
   }
 }
