@@ -1,64 +1,59 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, Column } from 'typeorm'
+import { Person } from '../../entities/person/Person'
 
-@Entity('user') // Map this class to the "user" table
-export class User {
-  @PrimaryGeneratedColumn()
-  id!: number;
+@Entity('user')
+export class User extends Person {
+  @Column('text', { nullable: true })
+  username!: string | null
 
   @Column('text', { nullable: true })
-  username!: string | null;
+  password!: string | null
 
   @Column('text', { nullable: true })
-  systemId!: string | null;
+  status!: string | null
 
-  @Column('integer', { nullable: true })
-  dateLastLoggedIn!: number | null;
-
-  @Column('text', { nullable: true })
-  uri!: string | null;
-
-  @Column('text')
-  uuid!: string;
-
-  @Column('integer', { nullable: true })
-  person_personId!: number | null;
+  @Column('boolean', { nullable: true })
+  shouldResetPassword!: boolean | null
 
   @Column('text', { nullable: true })
-  person_personUuid!: string | null;
+  salt!: string | null
 
-  @Column('text', { nullable: true })
-  person_gender!: string | null;
-
-  @Column('integer', { nullable: true })
-  person_birthdate!: number | null;
-
-  @Column('integer', { nullable: true })
-  person_birthdateEstimated!: number | null;
-
-  @Column('text', { nullable: true })
-  person_names!: string | null;
-
-  @Column('text', { nullable: true })
-  person_attributes!: string | null;
-
-  @Column('text', { nullable: true })
-  person_addresses!: string | null;
-
-  @Column('integer', { nullable: true })
-  person_voided!: number | null;
-
-  @Column('text', { nullable: true })
-  person_personTags!: string | null;
-
-  @Column('text', { nullable: true })
-  person_uri!: string | null;
-
-  @Column('text', { nullable: true })
-  person_uuid!: string | null;
+  @Column('jsonb', { nullable: true })
+  attributes!: Record<string, any> | null
 
   constructor(init?: Partial<User>) {
+    super()
     if (init) {
-      Object.assign(this, init);
+      Object.assign(this, init)
+    }
+  }
+
+  static override fromDTO(dto: any): User {
+    const entity = new User()
+    const base = Person.fromDTO(dto)
+
+    Object.assign(entity, base)
+
+    entity.username = dto.username ?? null
+    entity.password = dto.password ?? null
+    entity.status = dto.status ?? null
+    entity.shouldResetPassword = dto.shouldResetPassword ?? null
+    entity.salt = dto.salt ?? null
+    entity.attributes = dto.attributes ?? null
+
+    return entity
+  }
+
+  override toDTO(): any {
+    return {
+      ...super.toDTO(), // Campos herdados de Person/BaseEntity
+
+      username: this.username,
+      password: this.password,
+      status: this.status,
+      shouldResetPassword: this.shouldResetPassword,
+      salt: this.salt,
+      attributes: this.attributes,
     }
   }
 }

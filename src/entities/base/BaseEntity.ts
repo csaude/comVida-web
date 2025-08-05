@@ -1,24 +1,40 @@
-import { Column, PrimaryColumn } from 'typeorm'
+import { PrimaryGeneratedColumn, Column } from 'typeorm'
 
 export abstract class BaseEntity {
-  @PrimaryColumn('int')
+  @PrimaryGeneratedColumn()
   id!: number
 
-  @Column('text', { unique: true })
+  @Column({ type: 'text', unique: true })
   uuid!: string
 
-  @Column('text')
+  @Column({ type: 'text' })
   createdBy!: string
 
-  @Column('timestamp')
+  @Column({ type: 'timestamp' })
   createdAt!: Date
 
-  @Column('text', { nullable: true })
+  @Column({ type: 'text', nullable: true })
   updatedBy?: string
 
-  @Column('timestamp', { nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   updatedAt?: Date
 
-  @Column('text')
+  @Column({ type: 'text' })
   lifeCycleStatus!: string
+
+  // Evita repetição no fromDTO
+  updateBaseFieldsFromDTO(dto: any): void {
+    if (dto.id !== undefined) this.id = dto.id
+    if (dto.uuid !== undefined) this.uuid = dto.uuid
+    if (dto.lifeCycleStatus !== undefined) this.lifeCycleStatus = dto.lifeCycleStatus
+  }
+
+  // Evita repetição no toDTO
+  getBaseDTO(): any {
+    return {
+      id: this.id,
+      uuid: this.uuid,
+      lifeCycleStatus: this.lifeCycleStatus
+    }
+  }
 }

@@ -1,9 +1,7 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
   TableInheritance,
-  Index,
 } from 'typeorm'
 import { BaseEntity } from '../base/BaseEntity'
 
@@ -11,7 +9,7 @@ import { BaseEntity } from '../base/BaseEntity'
 @TableInheritance({ column: { type: 'varchar', name: 'type' } }) // Estratégia JOINED
 export class Person extends BaseEntity {
   @Column('json', { nullable: true })
-  names!: string | null
+  names!: Record<string, any>[] | null
 
   @Column({ type: 'varchar', length: 10, nullable: true })
   sex!: string | null
@@ -20,10 +18,14 @@ export class Person extends BaseEntity {
   birthdate!: Date | null
 
   @Column('json', { nullable: true })
-  address!: string | null
+  address!: Record<string, any>[] | null
 
   @Column('json', { name: 'person_attributes', nullable: true })
-  personAttributes!: string | null
+  personAttributes!: Record<string, any> | null
+
+  // Dentro da classe Person
+  fullName?: string | null
+  fullAddress?: string | null
 
   constructor(init?: Partial<Person>) {
     super()
@@ -32,45 +34,91 @@ export class Person extends BaseEntity {
     }
   }
 
-  // Método para converter Entity -> DTO
-  toDTO() {
+  static fromDTO(dto: any): Person {
+    const entity = new Person()
+
+    entity.updateBaseFieldsFromDTO(dto)
+
+
+    entity.names = dto.names ?? []
+    entity.address = dto.address ?? []
+    entity.sex = dto.sex ?? null
+    entity.birthdate = dto.birthdate ? new Date(dto.birthdate) : null
+    entity.personAttributes = dto.personAttributes ?? {}
+
+    // ⬇️ Calcular fullName com segurança
+    let fullName: string | null = null
+    if (entity.names && entity.names.length > 0) {
+      const preferedName = entity.names.find(n => n?.prefered) ?? entity.names[0]
+      const firstName = preferedName?.firstName ?? ''
+      const lastName = preferedName?.lastName ?? ''
+      fullName = `${firstName} ${lastName}`.trim() || null
+    }
+
+    // ⬇️ Calcular fullAddress com segurança
+    let fullAddress: string | null = null
+    if (entity.address && entity.address.length > 0) {
+      const preferedAddress = entity.address.find(a => a?.prefered) ?? entity.address[0]
+      const addressLine1 = preferedAddress?.addressLine1 ?? ''
+      const city = preferedAddress?.city ?? ''
+      const district = preferedAddress?.district ?? ''
+      const province = preferedAddress?.province ?? ''
+      fullAddress = [addressLine1, city, district, province].filter(Boolean).join(', ') || null
+    }
+
+    entity.fullName = fullName
+    entity.fullAddress = fullAddress
+
+    return entity
+  }
+
+
+
+  toDTO(): any {
+    const preferedName =
+      this.names?.find(n => n.prefered) ??
+      this.names?.[0] ?? {}
+
+    const preferedAddress =
+      this.address?.find(a => a.prefered) ??
+      this.address?.[0] ?? {}
+
+    const firstName = preferedName.firstName ?? ''
+    const lastName = preferedName.lastName ?? ''
+
+    const addressLine1 = preferedAddress.addressLine1 ?? ''
+    const city = preferedAddress.city ?? ''
+    const district = preferedAddress.district ?? ''
+    const province = preferedAddress.province ?? ''
+
     return {
+      // BaseEntity
       id: this.id,
       uuid: this.uuid,
       createdBy: this.createdBy,
-      createdAt: this.createdAt ? this.createdAt.toISOString() : null,
+      createdAt: this.createdAt?.toISOString() ?? null,
       updatedBy: this.updatedBy ?? null,
-      updatedAt: this.updatedAt ? this.updatedAt.toISOString() : null,
+      updatedAt: this.updatedAt?.toISOString() ?? null,
       lifeCycleStatus: this.lifeCycleStatus,
 
-      names: this.names,
+      // Prefered Name (flat)
+      firstName,
+      lastName,
+      fullName: `${firstName} ${lastName}`.trim(),
+
+      // Prefered Address (flat)
+      addressLine1,
+      city,
+      district,
+      province,
+      fullAddress: [addressLine1, city, district, province].filter(Boolean).join(', '),
+
+      // Raw JSON arrays
+      names: this.names ?? [],
+      address: this.address ?? [],
       sex: this.sex,
-      birthdate: this.birthdate
-        ? this.birthdate.toISOString().substring(0, 10)
-        : null,
-      address: this.address,
-      personAttributes: this.personAttributes,
+      birthdate: this.birthdate?.toISOString().substring(0, 10) ?? null,
+      personAttributes: this.personAttributes ?? {}
     }
-  }
-
-  // Método estático para criar Entity a partir de DTO
-  static fromDTO(dto: any): Person {
-    const entity = new Person()
-    if (dto.id !== undefined) entity.id = dto.id
-    if (dto.uuid !== undefined) entity.uuid = dto.uuid
-    if (dto.createdBy !== undefined) entity.createdBy = dto.createdBy
-    if (dto.createdAt !== undefined) entity.createdAt = new Date(dto.createdAt)
-    if (dto.updatedBy !== undefined) entity.updatedBy = dto.updatedBy
-    if (dto.updatedAt !== undefined) entity.updatedAt = new Date(dto.updatedAt)
-    if (dto.lifeCycleStatus !== undefined)
-      entity.lifeCycleStatus = dto.lifeCycleStatus
-
-    entity.names = dto.names ?? null
-    entity.sex = dto.sex ?? null
-    entity.birthdate = dto.birthdate ? new Date(dto.birthdate) : null
-    entity.address = dto.address ?? null
-    entity.personAttributes = dto.personAttributes ?? null
-
-    return entity
   }
 }
