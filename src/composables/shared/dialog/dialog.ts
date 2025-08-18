@@ -1,19 +1,42 @@
-import Swal from 'sweetalert2';
+// src/composables/shared/dialog/dialog.ts
+import Swal, { type SweetAlertOptions } from 'sweetalert2'
+
+const DEFAULT_Z = 12000
+const CONTAINER_CLASS = 'swal2-on-top'
+
+function withStack(opts: SweetAlertOptions = {}): SweetAlertOptions {
+  // Merge options and ensure container gets a high z-index
+  const merged: SweetAlertOptions = {
+    ...opts,
+    customClass: {
+      container: CONTAINER_CLASS,
+      ...(opts.customClass || {})
+    },
+    didOpen: (el: HTMLElement) => {
+      // push container above Quasar overlays
+      const container = Swal.getContainer()
+      if (container) container.style.zIndex = String(DEFAULT_Z)
+
+      // preserve user-provided didOpen
+      if (typeof opts.didOpen === 'function') opts.didOpen(el)
+    }
+  }
+  return merged
+}
 
 export function useSwal() {
-  // Success Alert
-  function alertSucess(message: string) {
-    return Swal.fire({
+  function alertSucess(message: string, opts?: SweetAlertOptions) {
+    return Swal.fire(withStack({
       title: 'Sucesso',
       text: message,
       icon: 'success',
       confirmButtonText: 'OK',
-    });
+      ...opts
+    }))
   }
 
-  // Success Alert with Action
-  function alertSucessAction(message: string) {
-    return Swal.fire({
+  function alertSucessAction(message: string, opts?: SweetAlertOptions) {
+    return Swal.fire(withStack({
       title: 'Sucesso',
       text: message,
       icon: 'success',
@@ -22,99 +45,95 @@ export function useSwal() {
       confirmButtonText: 'Sim',
       allowOutsideClick: false,
       allowEscapeKey: false,
-    });
+      ...opts
+    }))
   }
 
-  // Warning Alert with Custom Title
-  function alertWarningTitle(title: string, message: string) {
-    return Swal.fire({
-      title: title,
+  function alertWarningTitle(title: string, message: string, opts?: SweetAlertOptions) {
+    return Swal.fire(withStack({
+      title,
       text: message,
       icon: 'warning',
       confirmButtonText: 'Ok',
-    });
+      ...opts
+    }))
   }
 
-  // Warning Alert
-  function alertWarning(message: string) {
-    return Swal.fire({
+  function alertWarning(message: string, opts?: SweetAlertOptions) {
+    return Swal.fire(withStack({
       title: 'Aviso',
       text: message,
       icon: 'warning',
-      allowOutsideClick: false, // Prevents closing by clicking outside
+      allowOutsideClick: false,
       allowEscapeKey: false,
       confirmButtonText: 'Ok',
-    });
+      ...opts
+    }))
   }
 
-  // Error Alert
-  function alertError(message: string) {
-    return Swal.fire({
+  function alertError(message: string, opts?: SweetAlertOptions) {
+    return Swal.fire(withStack({
       title: 'Erro',
       text: message,
       icon: 'error',
       confirmButtonText: 'Ok',
-    });
+      ...opts
+    }))
   }
 
-  // Info Alert
-  function alertInfo(message: string) {
-    return Swal.fire({
+  function alertInfo(message: string, opts?: SweetAlertOptions) {
+    return Swal.fire(withStack({
       title: 'Informação',
       text: message,
       icon: 'info',
       confirmButtonText: 'Ok',
-    });
+      ...opts
+    }))
   }
 
-  // Warning Alert with Confirmation Action
-  function alertWarningAction(message: string) {
-    return Swal.fire({
+  function alertWarningAction(message: string, opts?: SweetAlertOptions) {
+    return Swal.fire(withStack({
       title: 'Confirmação',
       text: message,
       icon: 'warning',
       showCancelButton: true,
       cancelButtonText: 'Não',
       confirmButtonText: 'Sim',
-      confirmButtonColor: '#d33', // Red color for danger confirmation button
+      confirmButtonColor: '#d33',
       allowOutsideClick: false,
       allowEscapeKey: false,
-    }).then((result) => result.isConfirmed);
+      ...opts
+    })).then(res => res.isConfirmed)
   }
-  
 
-  // Custom Form Alert for Service Selection
-  async function confirmeServiceReport() {
-    const { value: formValues } = await Swal.fire({
+  async function confirmeServiceReport(opts?: SweetAlertOptions) {
+    const { value: formValues } = await Swal.fire(withStack({
       title: 'Selecionar Serviço por imprimir',
       html: `
         <div class="q-pa-md">
           <input type="checkbox" id="tarvCheckbox">
-          <label for="tarvCheckbox">TARV</label>
-          <br>
+          <label for="tarvCheckbox">TARV</label><br>
           <input type="checkbox" id="tbCheckbox">
-          <label for="tbCheckbox">TB</label>
-          <br>
+          <label for="tbCheckbox">TB</label><br>
           <input type="checkbox" id="smiCheckbox">
           <label for="smiCheckbox">SMI</label>
         </div>
       `,
       focusConfirm: false,
-      preConfirm: () => {
-        return {
-          tarv: (document.getElementById('tarvCheckbox') as HTMLInputElement)?.checked || false,
-          tb: (document.getElementById('tbCheckbox') as HTMLInputElement)?.checked || false,
-          smi: (document.getElementById('smiCheckbox') as HTMLInputElement)?.checked || false,
-        };
-      },
-    });
+      preConfirm: () => ({
+        tarv: (document.getElementById('tarvCheckbox') as HTMLInputElement)?.checked || false,
+        tb: (document.getElementById('tbCheckbox') as HTMLInputElement)?.checked || false,
+        smi: (document.getElementById('smiCheckbox') as HTMLInputElement)?.checked || false
+      }),
+      ...opts
+    }))
 
     if (formValues) {
-      Swal.fire({
+      await Swal.fire(withStack({
         title: 'Selecionado',
         text: `TARV: ${formValues.tarv}, TB: ${formValues.tb}, SMI: ${formValues.smi}`,
-        icon: 'info',
-      });
+        icon: 'info'
+      }))
     }
   }
 
@@ -126,6 +145,6 @@ export function useSwal() {
     alertWarningAction,
     alertSucessAction,
     alertWarningTitle,
-    confirmeServiceReport,
-  };
+    confirmeServiceReport
+  }
 }

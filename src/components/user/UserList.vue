@@ -3,12 +3,17 @@ import { onMounted, ref, computed, watch } from 'vue'
 import { useUserStore } from 'src/stores/user/userStore'
 import { useSwal } from 'src/composables/shared/dialog/dialog'
 import { useApiErrorHandler } from 'src/composables/shared/error/useApiErrorHandler'
+import UserForm from 'src/components/user/UserForm.vue'
+
 
 const userStore = useUserStore()
 const { alertWarningAction, alertError } = useSwal()
 const { handleApiError } = useApiErrorHandler()
 
 const nameFilter = ref('')
+const showUserDialog = ref(false)
+const selectedUser = ref<any | null>(null)
+
 
 const users = computed({
   get: () => userStore.currentPageUsers,
@@ -118,6 +123,41 @@ const toggleStatusHandler = async (user: any) => {
     handleApiError(err, 'Erro ao atualizar estado do utilizador')
   }
 }
+
+const openEditDialog = (row: any) => {
+    selectedUser.value = row
+    showUserDialog.value = true
+  }
+
+  const openAddDialog = () => {
+    console.log('Opening add user dialog')
+    selectedUser.value = null // reset form
+    showUserDialog.value = true
+  }
+
+  const handleClose = async () => {
+    showUserDialog.value = false
+    selectedUser.value = null
+    // Just refresh with current filter and pagination
+    await userStore.fetchUsers({
+      page: pagination.value.page - 1,
+      size: pagination.value.rowsPerPage,
+      name: nameFilter.value,
+      ignoreCache: false
+    })
+  }
+
+  const handleUserSave = async (user: any) => {
+    await saveUserHandler(user)
+    showUserDialog.value = false
+    await userStore.fetchUsers({
+      page: pagination.value.page - 1,
+      size: pagination.value.rowsPerPage,
+      name: nameFilter.value,
+      ignoreCache: false
+    })
+  }
+
 </script>
 
 <template>
@@ -131,10 +171,14 @@ const toggleStatusHandler = async (user: any) => {
     :extra-actions="extraActions"
     :confirm-error="alertError"
     :confirm-delete="alertWarningAction"
+    :use-external-edit="true"
+    :use-external-add="true"
     @save="(row, { resolve, reject }) => saveUserHandler(row).then(resolve).catch(reject)"
     @delete="(row, { resolve, reject }) => deleteUserHandler(row.uuid).then(resolve).catch(reject)"
     @search="onSearch"
     @toggle-status="toggleStatusHandler"
+    @edit="openEditDialog"
+    @add="openAddDialog"
   >
     <template #action-buttons>
       <q-btn outline color="primary" dense icon="ios_share" class="q-ml-sm" @click="$emit('import-users')">
@@ -148,4 +192,18 @@ const toggleStatusHandler = async (user: any) => {
       </q-btn>
     </template>
   </EditableTable>
+
+  <!-- 🚀 Dialog is now OUTSIDE -->
+  <q-dialog v-model="showUserDialog" persistent style="width: 80%;">
+    <q-card class="q-pa-none" style="min-width: 80%; max-width: 90vw;">
+      <UserForm
+        :model-value="selectedUser"
+        :selected-user="selectedUser"
+        @save="handleUserSave"
+        @cancel="() => showUserDialog = false"
+        @close="handleClose"
+      />
+    </q-card>
+  </q-dialog>
 </template>
+
