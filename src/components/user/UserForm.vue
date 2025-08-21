@@ -62,14 +62,13 @@
 
         <!-- Perfis/Permissões (UI rows) -->
         <div class="q-mt-lg">
-          <!-- v-model here is an array of UI rows; we transform to userServiceRoles on submit -->
           <UserRolesTable v-model="user.roles" />
         </div>
       </q-card-section>
 
-      <q-card-actions align="right" class="q-pa-md">
+      <q-card-actions align="right" class="q-pb-md q-pr-md">
         <q-btn label="Cancelar" color="red" outlined @click="$emit('cancel')" />
-        <q-btn label="Salvar" type="submit" color="primary" :loading="saving" :disable="saving" />
+        <q-btn label="Gravar" type="submit" color="primary" :loading="saving" :disable="saving" />
       </q-card-actions>
     </q-form>
   </q-card>
@@ -78,45 +77,43 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useUserStore } from 'src/stores/user/userStore'
+import { useGroupStore } from 'src/stores/group/groupStore'   // ⬅️ NEW
 import { useSwal } from 'src/composables/shared/dialog/dialog'
 import { useApiErrorHandler } from 'src/composables/shared/error/useApiErrorHandler'
 import UserRolesTable from './UserRolesTable.vue'
 
-/** UI rows coming from UserRolesTable */
 type RoleRow = {
   programId: number | null
   programActivityId: number | null
   roleUuid: string | null
   lifeCycleStatus?: string
   groupUuids?: string[]
-  groupNames?: string[] // display-only
+  groupNames?: string[]   // ⬅️ NEW
+  id?: string             // ⬅️ útil para UI
 }
 
-/** Final structure sent to backend */
 type UserServiceRoleDTO = {
   programId: number
   programActivityId: number
   roleUuid: string
   groupUuids: string[]
-  lifeCycleStatus?: string
+  lifeCycleStatus: string
 }
 
 const props = defineProps({
-  /** When editing, parent can pass the user object here */
   modelValue: { type: Object as () => any, default: null }
 })
 
-/** We don't emit 'save' anymore. Only 'close' and 'cancel'. */
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'cancel'): void
 }>()
 
 const userStore = useUserStore()
+const groupStore = useGroupStore()                // ⬅️ NEW
 const { alertSucess, alertError } = useSwal()
 const { handleApiError } = useApiErrorHandler()
 
-/** Local form state */
 const user = ref<{
   id: number | null
   name: string
@@ -125,7 +122,7 @@ const user = ref<{
   password: string
   integratedSystem: number | null
   idOnIntegratedSystem: string
-  roles: RoleRow[] // UI-only rows, transformed on submit
+  roles: RoleRow[]
 }>({
   id: null,
   name: '',
@@ -141,7 +138,118 @@ const passwordConfirm = ref('')
 const usesIntegratedSystem = ref(false)
 const saving = ref(false)
 
-/** Build final userServiceRoles[] from UI rows (dedup + only complete rows) */
+/** Systems list (ids só para UI; name vai no atributo) */
+const integratedSystems = [
+  { id: 1, name: 'OPENMRS' },
+  { id: 2, name: 'DHIS2' },
+  { id: 3, name: 'IDART' }
+]
+const getSystemNameById = (id?: number | null) =>
+  integratedSystems.find(s => s.id === id)?.name ?? null
+const getSystemIdByName = (name?: string | null) =>
+  integratedSystems.find(s => s.name === name)?.id ?? null
+
+/** Utils */
+const uniq = <T,>(arr: T[]) => Array.from(new Set(arr))
+
+function extractGroupUuids(u: any): string[] {
+  const out: string[] = []
+  if (Array.isArray(u.groupUuids)) out.push(...u.groupUuids.map((v: any) => String(v ?? '').trim()).filter(Boolean))
+  if (Array.isArray(u.userServiceRoleGroups)) {
+    out.push(
+      ...u.userServiceRoleGroups
+        .map((g: any) => g?.uuid ?? g?.groupUuid ?? g?.group?.uuid ?? null)
+        .filter((v: any): v is string => typeof v === 'string' && v.trim().length > 0)
+        .map((s: string) => s.trim())
+    )
+  }
+  if (Array.isArray(u.groups)) {
+    out.push(
+      ...u.groups
+        .map((g: any) => g?.uuid ?? g?.groupUuid ?? g?.group?.uuid ?? null)
+        .filter((v: any): v is string => typeof v === 'string' && v.trim().length > 0)
+        .map((s: string) => s.trim())
+    )
+  }
+  return uniq(out)
+}
+
+function extractGroupNames(u: any): string[] {
+  const out: string[] = []
+  if (Array.isArray(u.groupNames)) out.push(...u.groupNames.map((v: any) => String(v ?? '').trim()).filter(Boolean))
+  if (Array.isArray(u.userServiceRoleGroups)) {
+    out.push(
+      ...u.userServiceRoleGroups
+        .map((g: any) => g?.group?.name ?? g?.name ?? null)
+        .filter((v: any): v is string => typeof v === 'string' && v.trim().length > 0)
+        .map((s: string) => s.trim())
+    )
+  }
+  if (Array.isArray(u.groups)) {
+    out.push(
+      ...u.groups
+        .map((g: any) => g?.name ?? g?.group?.name ?? null)
+        .filter((v: any): v is string => typeof v === 'string' && v.trim().length > 0)
+        .map((s: string) => s.trim())
+    )
+  }
+  return uniq(out)
+}
+
+/** Index dos grupos em cache (uuid -> name) */
+function groupsIndexFromStore(): Record<string, string> {
+  const index: Record<string, string> = {}
+  const add = (gs: any[]) => {
+    for (const g of gs) {
+      const uuid = g?.uuid
+      const name = g?.name
+      if (uuid && name && !index[uuid]) index[uuid] = name
+    }
+  }
+  // páginas já carregadas
+  Object.values(groupStore.groupsPages).forEach(add)
+  add(groupStore.currentPageGroups)
+  return index
+}
+
+/** Garante groupNames usando o GroupStore (busca se necessário) */
+async function ensureGroupNamesForRoles(roles: RoleRow[]) {
+  if (!Array.isArray(roles) || roles.length === 0) return
+
+  // uuids ainda sem nome
+  const missing = new Set<string>()
+  for (const r of roles) {
+    const uuids = r.groupUuids ?? []
+    const names = new Set(r.groupNames ?? [])
+    const idx = groupsIndexFromStore()
+    for (const u of uuids) {
+      const n = idx[u]
+      if (n) names.add(n)
+      else missing.add(u)
+    }
+    r.groupNames = uniq(Array.from(names))
+  }
+
+  if (missing.size === 0) return
+
+  // tentar carregar mais grupos (uma busca ampla)
+  try {
+    await groupStore.fetchGroups({ page: 0, size: 1000, ignoreCache: true })
+    const idx = groupsIndexFromStore()
+    for (const r of roles) {
+      const names = new Set(r.groupNames ?? [])
+      for (const u of r.groupUuids ?? []) {
+        const n = idx[u]
+        if (n) names.add(n)
+      }
+      r.groupNames = uniq(Array.from(names))
+    }
+  } catch {
+    /* silencioso: se falhar, apenas deixamos os names vazios */
+  }
+}
+
+/** Normaliza & deduplica roles para o envio */
 const userServiceRoles = computed<UserServiceRoleDTO[]>(() => {
   const out: UserServiceRoleDTO[] = []
   const seen = new Set<string>()
@@ -157,14 +265,13 @@ const userServiceRoles = computed<UserServiceRoleDTO[]>(() => {
       programId: pid,
       programActivityId: paid,
       roleUuid: rid,
-      groupUuids: Array.from(new Set(r.groupUuids ?? [])),
-      ...(r.lifeCycleStatus ? { lifeCycleStatus: r.lifeCycleStatus } : {})
+      groupUuids: uniq(r.groupUuids ?? []),
+      lifeCycleStatus: r.lifeCycleStatus || 'ACTIVE'
     })
   }
   return out
 })
 
-/** Clear integrated fields when toggle goes off */
 watch(usesIntegratedSystem, enabled => {
   if (!enabled) {
     user.value.integratedSystem = null
@@ -172,34 +279,57 @@ watch(usesIntegratedSystem, enabled => {
   }
 })
 
-/** Prefill for edit / reset for add */
+/** Prefill edição / reset criação */
 watch(
   () => props.modelValue,
-  (val: any) => {
+  async (val: any) => {
     if (val) {
+      // de attributes[type=integratedSystem]
+      const att = Array.isArray(val.attributes)
+        ? val.attributes.find((a: any) => a?.type === 'integratedSystem')
+        : null
+
+      const roles: RoleRow[] = Array.isArray(val.roles)
+        ? [...val.roles]
+        : Array.isArray(val.userServiceRoles)
+          ? val.userServiceRoles.map((u: any) => {
+              const programId = u.programId ?? u.program?.id ?? null
+              const programActivityId = u.programActivityId ?? u.programActivity?.id ?? null
+              const roleUuid = u.roleUuid ?? u.role?.uuid ?? null
+
+              const groupUuids = extractGroupUuids(u)
+              const groupNames = extractGroupNames(u)
+
+              return {
+                programId,
+                programActivityId,
+                roleUuid,
+                lifeCycleStatus: u.lifeCycleStatus ?? 'ACTIVE',
+                groupUuids,
+                groupNames,
+                id: programId && programActivityId && roleUuid
+                  ? `${programId}|${programActivityId}|${roleUuid}`
+                  : undefined
+              }
+            })
+          : []
+
       user.value = {
         id: val.id ?? null,
-        name: val.name ?? '',
-        surname: val.surname ?? '',
+        name: val.name ?? val.firstName ?? '',
+        surname: val.surname ?? val.lastName ?? '',
         username: val.username ?? '',
-        password: '', // never prefill password
-        integratedSystem: val.integratedSystem ?? null,
-        idOnIntegratedSystem: val.idOnIntegratedSystem ?? '',
-        // Prefer UI rows (`roles`); otherwise map from `userServiceRoles`
-        roles: Array.isArray(val.roles)
-          ? [...val.roles]
-          : Array.isArray(val.userServiceRoles)
-            ? val.userServiceRoles.map((u: any) => ({
-                programId: u.programId ?? u.program?.id ?? null,
-                programActivityId: u.programActivityId ?? u.programActivity?.id ?? null,
-                roleUuid: u.roleUuid ?? u.role?.uuid ?? null,
-                lifeCycleStatus: u.lifeCycleStatus,
-                groupUuids: Array.isArray(u.groupUuids) ? [...u.groupUuids] : []
-              }))
-            : []
+        password: '',
+        integratedSystem: getSystemIdByName(att?.integratedSystemName ?? null),
+        idOnIntegratedSystem: att?.idOnIntegratedSystem ?? '',
+        roles
       }
-      usesIntegratedSystem.value = !!(val.integratedSystem || val.idOnIntegratedSystem)
+
+      usesIntegratedSystem.value = !!att
       passwordConfirm.value = ''
+
+      // ⬅️ NEW: se faltar nomes dos grupos, tentar resolver via store
+      await ensureGroupNamesForRoles(user.value.roles)
     } else {
       user.value = {
         id: null,
@@ -218,16 +348,8 @@ watch(
   { immediate: true }
 )
 
-/** Replace with a store/computed if you load these from API */
-const integratedSystems = [
-  { id: 1, name: 'OpenMRS' },
-  { id: 2, name: 'DHIS2' },
-  { id: 3, name: 'iDART' }
-]
-
-/** Submit -> call userStore.saveUser and close */
+/** Enviar */
 const submitForm = async () => {
-  // simple validations
   if (!user.value.username?.trim()) {
     alertError('Informe o Username.')
     return
@@ -241,24 +363,53 @@ const submitForm = async () => {
     return
   }
 
+  if (usesIntegratedSystem.value) {
+    if (!user.value.integratedSystem || !user.value.idOnIntegratedSystem?.trim()) {
+      alertError('Selecione o Sistema Integrado e informe o ID correspondente.')
+      return
+    }
+  }
+
+  const names = [
+    {
+      prefered: true,
+      firstName: (user.value.name || '').trim(),
+      lastName: (user.value.surname || '').trim()
+    }
+  ]
+
+  const attributes: any[] = []
+  if (usesIntegratedSystem.value) {
+    const integratedSystemName = getSystemNameById(user.value.integratedSystem)
+    attributes.push({
+      type: 'integratedSystem',
+      integratedSystemName,
+      idOnIntegratedSystem: user.value.idOnIntegratedSystem
+    })
+  }
+
   const payload: any = {
-    id: user.value.id,
-    name: user.value.name,
-    surname: user.value.surname,
-    username: user.value.username,
+    id: user.value.id ?? null,
+    username: user.value.username?.trim(),
     ...(user.value.password ? { password: user.value.password } : {}),
-    integratedSystem: usesIntegratedSystem.value ? user.value.integratedSystem : null,
-    idOnIntegratedSystem: usesIntegratedSystem.value ? user.value.idOnIntegratedSystem : '',
-    // ✅ final array for backend, including groupUuids
+    status: 'ACTIVE',
+    shouldResetPassword: false,
+    salt: null,
+
+    names,
+    address: [],
+    personAttributes: [],
+
+    attributes,
+
     userServiceRoles: userServiceRoles.value
   }
 
   try {
     saving.value = true
-    console.log('Saving user:', payload)
-    //await userStore.saveUser(payload)
+    await userStore.saveUser(payload)
     await alertSucess('Utilizador salvo com sucesso.')
-    emit('close') // parent closes dialog and refreshes list
+    emit('close')
   } catch (err: any) {
     handleApiError(err, 'Erro ao salvar utilizador')
   } finally {
@@ -268,5 +419,5 @@ const submitForm = async () => {
 </script>
 
 <style scoped>
-/* optional styling tweaks here */
+/* optional styling tweaks */
 </style>

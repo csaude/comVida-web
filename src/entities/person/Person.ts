@@ -20,12 +20,15 @@ export class Person extends BaseEntity {
   @Column('json', { nullable: true })
   address!: Record<string, any>[] | null
 
+  // Se o seu backend passou a enviar personAttributes como array, pode trocar para Record<string, any>[] | null
   @Column('json', { name: 'person_attributes', nullable: true })
-  personAttributes!: Record<string, any> | null
+  personAttributes!: Record<string, any> | Record<string, any>[] | null
 
-  // Dentro da classe Person
+  // Campos derivados/expostos
   fullName?: string | null
   fullAddress?: string | null
+  firstName?: string | null
+  lastName?: string | null
 
   constructor(init?: Partial<Person>) {
     super()
@@ -39,48 +42,34 @@ export class Person extends BaseEntity {
 
     entity.updateBaseFieldsFromDTO(dto)
 
-
+    // Arrays vindos da API
     entity.names = dto.names ?? []
     entity.address = dto.address ?? []
     entity.sex = dto.sex ?? null
     entity.birthdate = dto.birthdate ? new Date(dto.birthdate) : null
-    entity.personAttributes = dto.personAttributes ?? {}
+    entity.personAttributes = dto.personAttributes ?? []
 
-    // ⬇️ Calcular fullName com segurança
-    let fullName: string | null = null
-    if (entity.names && entity.names.length > 0) {
-      const preferedName = entity.names.find(n => n?.prefered) ?? entity.names[0]
-      const firstName = preferedName?.firstName ?? ''
-      const lastName = preferedName?.lastName ?? ''
-      fullName = `${firstName} ${lastName}`.trim() || null
+    // 👇 Fonte da verdade: API `fullName`
+    if (dto.fullName && String(dto.fullName).trim().length > 0) {
+      entity.fullName = String(dto.fullName).trim()
+    } else {
+      // Fallback seguro (se API não mandar fullName)
+      entity.fullName = Person.buildFullNameFromNames(entity.names)
     }
 
-    // ⬇️ Calcular fullAddress com segurança
-    let fullAddress: string | null = null
-    if (entity.address && entity.address.length > 0) {
-      const preferedAddress = entity.address.find(a => a?.prefered) ?? entity.address[0]
-      const addressLine1 = preferedAddress?.addressLine1 ?? ''
-      const city = preferedAddress?.city ?? ''
-      const district = preferedAddress?.district ?? ''
-      const province = preferedAddress?.province ?? ''
-      fullAddress = [addressLine1, city, district, province].filter(Boolean).join(', ') || null
-    }
-
-    entity.fullName = fullName
-    entity.fullAddress = fullAddress
+    // ⬇️ Calcular fullAddress (mantido como antes)
+    entity.fullAddress = Person.buildFullAddressFromAddress(entity.address)
 
     return entity
   }
 
-
-
   toDTO(): any {
     const preferedName =
-      this.names?.find(n => n.prefered) ??
+      this.names?.find((n: any) => n?.prefered) ??
       this.names?.[0] ?? {}
 
     const preferedAddress =
-      this.address?.find(a => a.prefered) ??
+      this.address?.find((a: any) => a?.prefered) ??
       this.address?.[0] ?? {}
 
     const firstName = preferedName.firstName ?? ''
@@ -90,6 +79,10 @@ export class Person extends BaseEntity {
     const city = preferedAddress.city ?? ''
     const district = preferedAddress.district ?? ''
     const province = preferedAddress.province ?? ''
+
+    // guarantees arrays
+    const asArray = (v: any, fallback: any[] = []) =>
+      Array.isArray(v) ? v : (v ? [v] : fallback)
 
     return {
       // BaseEntity
@@ -101,24 +94,53 @@ export class Person extends BaseEntity {
       updatedAt: this.updatedAt?.toISOString() ?? null,
       lifeCycleStatus: this.lifeCycleStatus,
 
-      // Prefered Name (flat)
+      // Preferred Name (flat de conveniência)
       firstName,
       lastName,
-      fullName: `${firstName} ${lastName}`.trim(),
 
-      // Prefered Address (flat)
+      // 👇 Exporta o que está na entidade (que veio da API), com fallback
+      fullName: this.fullName ?? Person.buildFullNameFromNames(this.names),
+
+      // Preferred Address (flat)
       addressLine1,
       city,
       district,
       province,
-      fullAddress: [addressLine1, city, district, province].filter(Boolean).join(', '),
+      fullAddress: Person.buildFullAddressFromAddress(this.address) ?? '',
 
-      // Raw JSON arrays
-      names: this.names ?? [],
-      address: this.address ?? [],
+      // JSON arrays (ensure arrays)
+      names: asArray(this.names, []),
+      address: asArray(this.address, []),
+      personAttributes: asArray(this.personAttributes, []),
+
+      // Other person fields
       sex: this.sex,
-      birthdate: this.birthdate?.toISOString().substring(0, 10) ?? null,
-      personAttributes: this.personAttributes ?? {}
+      birthdate: this.birthdate
+        ? new Date(this.birthdate).toISOString().slice(0, 10)
+        : null
     }
+  }
+
+  /* ===================== Helpers ===================== */
+
+  private static buildFullNameFromNames(names?: Record<string, any>[] | null): string | null {
+    if (!names || names.length === 0) return null
+    const prefered = names.find(n => n?.prefered) ?? names[0]
+    const firstName = (prefered?.firstName ?? '').trim()
+    const lastName = (prefered?.lastName ?? '').trim()
+    const out = `${firstName} ${lastName}`.trim()
+    return out.length ? out : null
+  }
+
+  private static buildFullAddressFromAddress(address?: Record<string, any>[] | null): string | null {
+    if (!address || address.length === 0) return null
+    const prefered = address.find(a => a?.prefered) ?? address[0]
+    const addressLine1 = (prefered?.addressLine1 ?? '').trim()
+    const city = (prefered?.city ?? '').trim()
+    const district = (prefered?.district ?? '').trim()
+    const province = (prefered?.province ?? '').trim()
+    const parts = [addressLine1, city, district, province].filter(Boolean)
+    const out = parts.join(', ')
+    return out.length ? out : null
   }
 }
