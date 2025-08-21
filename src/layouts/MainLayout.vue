@@ -8,8 +8,32 @@
           <div class="text-grey-1 text-subtitle1 q-mt-md">
             {{ currUser }}
           </div>
-          <div class="text-grey-1 text-subtitle1 q-mt-sm">
-            Ponto Focal SAAJ
+
+          <!-- ROLES chips (replaces 'Ponto Focal SAAJ') -->
+          <div v-if="roles.length" class="q-mt-sm q-gutter-xs flex justify-center items-center">
+            <q-chip
+              v-for="(r, idx) in visibleRoles"
+              :key="idx"
+              size="sm"
+              color="white"
+              text-color="primary"
+              outline
+            >
+              {{ r }}
+            </q-chip>
+            <q-chip
+              v-if="hiddenRolesCount > 0"
+              size="sm"
+              color="white"
+              text-color="primary"
+              outline
+              title="Mais roles"
+            >
+              +{{ hiddenRolesCount }}
+            </q-chip>
+          </div>
+          <div v-else class="text-grey-3 text-caption q-mt-sm">
+            (sem roles)
           </div>
         </div>
       </div>
@@ -95,15 +119,18 @@
 </template>
 
 <script setup>
-import { ref, computed, onBeforeMount, onMounted, onBeforeUnmount } from 'vue';
-import { Loading, QSpinnerRings, LocalStorage } from 'quasar';
-import { useRouter } from 'vue-router';
-import { version } from '../../package.json';
+import { ref, computed, onBeforeMount, onMounted, onBeforeUnmount } from 'vue'
+import { Loading, QSpinnerRings, LocalStorage } from 'quasar'
+import { useRouter } from 'vue-router'
+import { version } from '../../package.json'
+import { useUserStore } from 'src/stores/user/userStore'
 
-const leftDrawerOpen = ref(false);
-const link = ref('home');
-const router = useRouter();
-const appVersion = version;
+const leftDrawerOpen = ref(false)
+const link = ref('home')
+const router = useRouter()
+const appVersion = version
+
+const userStore = useUserStore()
 
 const menuOptions = [
   { label: 'Página inícial', icon: 'home', to: '/home', link: 'home' },
@@ -113,67 +140,98 @@ const menuOptions = [
   { label: 'Dashboard', icon: 'analytics', to: '/dashboard', link: 'dashboard' },
   { label: 'Relatórios', icon: 'assignment', to: '/reports', link: 'reports' },
   { label: 'Configurações', icon: 'settings', to: '/settings', link: 'settings' },
-];
+]
 
 const currentMenuLabel = computed(() => {
-  const match = menuOptions.find(option => option.link === link.value);
-  return match?.label || 'comVida';
-});
+  const match = menuOptions.find(option => option.link === link.value)
+  return match?.label || 'comVida'
+})
 
+let inactivityTimer
+let warningTimer
+const INACTIVITY_TIME = 15 * 60 * 1000
+const WARNING_TIME = 30 * 1000
+const warningTime = ref(WARNING_TIME)
+const showWarningDialog = ref(false)
 
-let inactivityTimer; // Store the inactivity timer
-let warningTimer; // Store the warning timer
-const INACTIVITY_TIME = 15 * 60 * 1000; // 15 minutes
-const WARNING_TIME = 30 * 1000; // Show warning 30 seconds before logout
-const warningTime = ref(WARNING_TIME);
-const showWarningDialog = ref(false);
+/** pick preferred name helper */
+function pickPreferredName(list) {
+  if (!Array.isArray(list) || list.length === 0) return null
+  return (
+    list.find(n =>
+      n?.prefered || n?.preferred || n?.isPreferred || n?.primary || n?.default || n?.preferido || n?.principal
+    ) ?? list[0]
+  )
+}
+function extractFullName(userNames) {
+  try {
+    if (!userNames) return ''
+    if (typeof userNames === 'string') {
+      const s = userNames.trim()
+      if (!s) return ''
+      if (s.startsWith('[') || s.startsWith('{')) {
+        const parsed = JSON.parse(s)
+        const arr = Array.isArray(parsed) ? parsed : [parsed]
+        const pref = pickPreferredName(arr)
+        if (!pref) return ''
+        const explicit = (pref.fullName || pref.display || '').trim()
+        if (explicit) return explicit
+        const first = (pref.firstName || pref.givenName || '').trim()
+        const last = (pref.lastName || pref.familyName || '').trim()
+        return `${first} ${last}`.trim()
+      }
+      return s
+    }
+    if (Array.isArray(userNames)) {
+      const pref = pickPreferredName(userNames)
+      if (!pref) return ''
+      const explicit = (pref.fullName || pref.display || '').trim()
+      if (explicit) return explicit
+      const first = (pref.firstName || pref.givenName || '').trim()
+      const last = (pref.lastName || pref.familyName || '').trim()
+      return `${first} ${last}`.trim()
+    }
+    return ''
+  } catch {
+    return ''
+  }
+}
 
-const currUser = 'Felisberto Silva'; // Placeholder for current user, replace with actual user data
+/** CURRENT USER NAME from saved auth_attrs */
+const currUser = computed(() => {
+  const attrs = userStore.authAttrs
+  if (!attrs) return ''
+  return extractFullName(attrs.userNames) || attrs.userName || ''
+})
+
+/** ROLES (names) + compact display */
+const roles = computed(() => userStore.roles)
+const MAX_ROLE_CHIPS = 3
+const visibleRoles = computed(() => roles.value.slice(0, MAX_ROLE_CHIPS))
+const hiddenRolesCount = computed(() => Math.max(0, roles.value.length - MAX_ROLE_CHIPS))
 
 onBeforeMount(() => {
-  initUserInfo();
-});
-
+  userStore.restoreSession()
+  initUserInfo()
+})
 
 const initUserInfo = () => {
-  const tokenExpiration = Number(localStorage.getItem('tokenExpiration'));
-
-};
+  const tokenExpiration = Number(localStorage.getItem('tokenExpiration'))
+}
 
 const visibleMenuOptions = computed(() =>
   menuOptions.filter(option => isMenuOptionVisible(option.to))
-);
+)
 
 const isMenuOptionVisible = menuOption => {
-   return true;
-  // const userData = JSON.parse(localStorage.getItem('userData')) || {};
-  // const roles = userData.roles || [];
-
-  // const rolePermissions = {
-  //   NATIONAL_ADMINISTRATOR: ['/home', '/cohorts', '/tracking', '/users', '/dashboard', '/rondas', '/settings'],
-  //   PROVINCIAL_ADMINISTRATOR: ['/home', '/tables', '/mentors', '/mentees', '/rondas', '/settings'],
-  //   DISTRICT_ADMINISTRATOR: ['/home', '/mentees', '/rondas', '/settings'],
-  //   NATIONAL_MENTOR: ['/home', '/reports', '/mentees'],
-  //   PROVINCIAL_MENTOR: ['/home', '/reports', '/mentees'],
-  //   DISTRICT_MENTOR: ['/home', '/reports', '/mentees'],
-  //   HEALTH_FACILITY_MENTOR: ['/home', '/mentees', '/resources', '/reports'],
-  //   MENTEE: ['/home', '/resources'],
-  // };
-
-  // const allowedPaths = roles.reduce((paths, role) => {
-  //   const rolePaths = rolePermissions[role] || [];
-  //   return [...new Set([...paths, ...rolePaths])]; // Merge paths without duplicates
-  // }, []);
-
-  // return allowedPaths.includes(menuOption);
-};
+  return true
+}
 
 const logout = () => {
-  Loading.show({ spinner: QSpinnerRings });
-  Loading.hide();
-  router.push('/login');
-};
-
+  Loading.show({ spinner: QSpinnerRings })
+  Loading.hide()
+  router.push('/login')
+}
 </script>
 
 <style lang="scss">

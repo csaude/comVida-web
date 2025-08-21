@@ -3,6 +3,7 @@ import UserService from 'src/services/user/userService'
 import { User } from 'src/entities/user/User'
 import { UserServiceRole } from 'src/entities/userServiceRole/UserServiceRole'
 import { Role } from 'src/entities/role/Role'
+import type { AuthAttributes } from 'src/types/auth'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -44,8 +45,90 @@ export const useUserStore = defineStore('user', {
       totalPages: 0,
       currentPage: 0,
       pageSize: 100
-    }
+    },
+    authAttrs: null as AuthAttributes | null
   }),
+
+  getters: {
+    /** Lista de serviceRoles vinda do JWT (novo payload) */
+    serviceRoles: (s) => s.authAttrs?.serviceRoles ?? [],
+
+    /** Uuids de grupos (legado), se o backend ainda enviar em nível de topo */
+    groupUuids: (s) => s.authAttrs?.groupUuids ?? [],
+
+    /** Grupos agregados a partir dos vínculos (userServiceRoleGroups, novo payload) */
+    groupsFromServiceRoles: (s) => {
+      const out: { uuid: string; name?: string; programActivityUuid?: string; programActivityId?: number }[] = []
+      for (const sr of s.authAttrs?.serviceRoles ?? []) {
+        for (const g of sr.userServiceRoleGroups ?? []) {
+          if (!g?.uuid) continue
+          if (!out.find(x => x.uuid === g.uuid)) {
+            out.push({
+              uuid: g.uuid,
+              name: g.name,
+              programActivityUuid: g.programActivityUuid,
+              programActivityId: g.programActivityId
+            })
+          }
+        }
+      }
+      return out
+    },
+
+    /** Nomes de roles (compatível com legado e novo) */
+    roles: (s) => {
+      const legacy = (s.authAttrs?.grants ?? []).map(g => g.roleName).filter(Boolean) as string[]
+      const fromSR = (s.authAttrs?.serviceRoles ?? [])
+        .map(sr => sr.role?.name)
+        .filter(Boolean) as string[]
+      return Array.from(new Set([...legacy, ...fromSR]))
+    },
+
+    /** Verifica role por NOME **ou** CÓDIGO (novo), mantendo compatibilidade */
+    hasRole: (s) => (roleCodeOrName: string) => {
+      const inSR =
+        (s.authAttrs?.serviceRoles ?? []).some(sr =>
+          sr.role?.code === roleCodeOrName || sr.role?.name === roleCodeOrName
+        )
+      const inLegacy = (s.authAttrs?.grants ?? []).some(g => g.roleName === roleCodeOrName)
+      return inSR || inLegacy
+    },
+
+    /** Verifica se pertence a um grupo (aceita uuid). Considera topo e serviceRoles */
+    inGroup(this: any, state) {
+      return (uuid: string) => {
+        if ((state.authAttrs?.groupUuids ?? []).includes(uuid)) return true
+        return this.groupsFromServiceRoles.some((g: { uuid: string }) => g.uuid === uuid)
+      }
+    },
+
+    /** Acesso por ID de ProgramActivity (compatível: legado + novo) */
+    canAccessProgramActivity: (s) => (paId?: number | null) => {
+      if (!paId) return true // global
+      const legacy = (s.authAttrs?.grants ?? []).some(g => g.programActivityId === paId)
+      const viaSR = (s.authAttrs?.serviceRoles ?? []).some(sr => sr.programActivity?.id === paId)
+      return legacy || viaSR
+    },
+
+    /** Acesso por UUID de ProgramActivity (novo) */
+    canAccessProgramActivityUuid: (s) => (paUuid?: string | null) => {
+      if (!paUuid) return true // global
+      const viaSR = (s.authAttrs?.serviceRoles ?? []).some(sr => sr.programActivity?.uuid === paUuid)
+      const legacy = (s.authAttrs?.grants ?? []).some(g => g.programActivityUuid === paUuid)
+      return viaSR || legacy
+    },
+
+    /** Verifica role em um PROGRAMA específico (usa role code OU name). Se programUuid for omitido, exige role global (sem programa). */
+    hasRoleInProgram: (s) => (roleCodeOrName: string, programUuid?: string | null) => {
+      return (s.authAttrs?.serviceRoles ?? []).some(sr => {
+        const roleOk = sr.role?.code === roleCodeOrName || sr.role?.name === roleCodeOrName
+        if (!roleOk) return false
+        const pUuid = sr.programActivity?.program?.uuid
+        return programUuid ? pUuid === programUuid : !pUuid // se não informar programa, exige global
+      })
+    }
+  },
+
 
   actions: {
     // ======================
@@ -55,12 +138,17 @@ export const useUserStore = defineStore('user', {
       this.error = null
       try {
         await UserService.login({ username, password })
+
+        // 🔑 carrega attrs decodificados do próprio token
+        this.authAttrs = UserService.parseAuthAttributesFromToken()
+
         this.currentUser = User.fromDTO(UserService.getCurrentUser())
         this.isAuthenticated = true
       } catch (err: any) {
         this.error = 'Credenciais inválidas ou erro de autenticação.'
         this.currentUser = null
         this.isAuthenticated = false
+        this.authAttrs = null
         throw err
       }
     },
@@ -69,6 +157,7 @@ export const useUserStore = defineStore('user', {
       UserService.logout()
       this.currentUser = null
       this.isAuthenticated = false
+      this.authAttrs = null
     },
 
     restoreSession() {
@@ -76,6 +165,11 @@ export const useUserStore = defineStore('user', {
       const authenticated = UserService.isAuthenticated()
       this.currentUser = user ? User.fromDTO(user) : null
       this.isAuthenticated = authenticated
+
+      // 🔁 tenta restaurar attrs persistidos (ou re-decodifica do token)
+      this.authAttrs =
+        UserService.getSavedAuthAttributes() ||
+        UserService.parseAuthAttributesFromToken()
     },
 
     // ======================
@@ -110,6 +204,7 @@ export const useUserStore = defineStore('user', {
 
       try {
         const response = await UserService.getAll({ ...params, page, size, name })
+        console.log('Fetched users:', response)
         const users = (response.content ?? []).map((dto: any) => User.fromDTO(dto))
 
         if (!isSearch) this.usersPages[page] = users
@@ -149,6 +244,8 @@ export const useUserStore = defineStore('user', {
         const dtoToSend =
           userData instanceof User ? userData.toDTO() : new User(userData).toDTO()
 
+          console.log('Saving user data:', dtoToSend)
+          
         const savedDto = dtoToSend.id
           ? await UserService.update(dtoToSend)
           : await UserService.save(dtoToSend)
