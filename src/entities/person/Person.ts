@@ -42,26 +42,37 @@ export class Person extends BaseEntity {
 
     entity.updateBaseFieldsFromDTO(dto)
 
-    // Arrays vindos da API
-    entity.names = dto.names ?? []
-    entity.address = dto.address ?? []
+    // Arrays vindos da API (normalizados para array)
+    entity.names = Array.isArray(dto.names) ? dto.names : (dto.names ? [dto.names] : [])
+    entity.address = Array.isArray(dto.address) ? dto.address : (dto.address ? [dto.address] : [])
     entity.sex = dto.sex ?? null
     entity.birthdate = dto.birthdate ? new Date(dto.birthdate) : null
-    entity.personAttributes = dto.personAttributes ?? []
+    entity.personAttributes = Array.isArray(dto.personAttributes)
+      ? dto.personAttributes
+      : (dto.personAttributes ? [dto.personAttributes] : [])
 
-    // 👇 Fonte da verdade: API `fullName`
+    // 👉 prefered name (ou primeiro da lista)
+    const prefered = entity.names && entity.names.length
+      ? (entity.names.find((n: any) => n?.prefered) ?? entity.names[0])
+      : null
+
+    entity.firstName = ((prefered?.firstName ?? '') as string).trim() || null
+    entity.lastName  = ((prefered?.lastName  ?? '') as string).trim() || null
+
+    // 👇 Fonte da verdade: API `fullName`; senão, montar de first+last (fallback para helper)
     if (dto.fullName && String(dto.fullName).trim().length > 0) {
       entity.fullName = String(dto.fullName).trim()
     } else {
-      // Fallback seguro (se API não mandar fullName)
-      entity.fullName = Person.buildFullNameFromNames(entity.names)
+      const built = [entity.firstName ?? '', entity.lastName ?? ''].filter(Boolean).join(' ').trim()
+      entity.fullName = built || Person.buildFullNameFromNames(entity.names)
     }
 
-    // ⬇️ Calcular fullAddress (mantido como antes)
+    // ⬇️ fullAddress como antes
     entity.fullAddress = Person.buildFullAddressFromAddress(entity.address)
 
     return entity
   }
+
 
   toDTO(): any {
     const preferedName =
