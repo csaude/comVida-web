@@ -241,32 +241,65 @@ export const useUserStore = defineStore('user', {
     async saveUser(userData: Partial<User>) {
       this.error = null
       try {
+        // 1) Monta dto e detecta se é criação
         const dtoToSend =
           userData instanceof User ? userData.toDTO() : new User(userData).toDTO()
+        const isNew = !dtoToSend.id
 
-          console.log('Saving user data:', dtoToSend)
-          
-        const savedDto = dtoToSend.id
-          ? await UserService.update(dtoToSend)
-          : await UserService.save(dtoToSend)
+        console.log('Saving user data:', dtoToSend)
 
+        // 2) Chama API e desembrulha payload (SuccessResponse { data })
+        const apiResp = isNew
+          ? await UserService.save(dtoToSend)
+          : await UserService.update(dtoToSend)
+
+        const savedDto = apiResp?.data ?? apiResp
+        console.log('User saved (raw):', savedDto)
+
+        // 3) Mapeia para entidade
         const saved = User.fromDTO(savedDto)
+        console.log('User entity created:', saved)
 
-        const page = this.pagination.currentPage
-        if (this.usersPages[page]) {
-          const index = this.usersPages[page].findIndex(u => u.id === saved.id)
-          if (index !== -1) this.usersPages[page][index] = saved
-          else this.usersPages[page].push(saved)
-          this.currentPageUsers = this.usersPages[page]
+        // 4) Helpers reativos
+        const replaceOrInsert = (arr?: User[]) => {
+          if (!Array.isArray(arr)) return false
+          const idx = arr.findIndex(u => u?.uuid === saved.uuid)
+          if (idx >= 0) {
+            arr.splice(idx, 1, saved)   // garante reatividade
+            return false                // já existia (edição)
+          } else {
+            arr.unshift(saved)          // novo registro entra no topo
+            return true                 // inseriu novo
+          }
         }
 
+        // 5) Atualiza TODAS as páginas cacheadas
+        let insertedSomewhere = false
+        for (const key of Object.keys(this.usersPages)) {
+          insertedSomewhere = replaceOrInsert(this.usersPages[key]) || insertedSomewhere
+        }
+
+        // 6) Atualiza SEMPRE a página atual na UI
+        insertedSomewhere = replaceOrInsert(this.currentPageUsers) || insertedSomewhere
+        // força reatividade de quem observa o array
+        this.currentPageUsers = [...this.currentPageUsers]
+
+        // 7) Ajusta paginação se foi criação e inserimos na lista
+        if (isNew && insertedSomewhere) {
+          this.pagination.totalSize += 1
+          this.pagination.totalPages = Math.ceil(this.pagination.totalSize / this.pagination.pageSize)
+        }
+
+        // 8) Seleção atual
         this.currentUser = saved
+        return saved
       } catch (error: any) {
         this.error = 'Erro ao salvar usuário'
         console.error(error.response?.data || error.message || error)
         throw error
       }
-    },
+    }
+    ,
 
     async updateUserLifeCycleStatus(uuid: string, lifeCycleStatus: string) {
       this.error = null
@@ -454,6 +487,17 @@ export const useUserStore = defineStore('user', {
         this.error = e?.response?.data?.message || 'Erro ao remover role'
         console.error(e)
         throw e
+      }
+    },
+
+    async updateUserPassword(uuid: string, newPassword: string) {
+      this.error = null
+      try {
+        await UserService.updatePassword(uuid, newPassword)
+      } catch (error: any) {
+        this.error = 'Erro ao atualizar senha do utilizador'
+        console.error(error)
+        throw error
       }
     }
   }

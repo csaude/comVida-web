@@ -9,6 +9,7 @@ import { useUserStore } from 'src/stores/user/userStore'
 import { useSwal } from 'src/composables/shared/dialog/dialog'
 import { useApiErrorHandler } from 'src/composables/shared/error/useApiErrorHandler'
 import UserForm from 'src/components/user/UserForm.vue'
+import UserPasswordResetDialog from 'src/components/user/UserPasswordResetDialog.vue'
 
 const userStore = useUserStore()
 const { alertWarningAction, alertError } = useSwal()
@@ -17,6 +18,9 @@ const { handleApiError } = useApiErrorHandler()
 const nameFilter = ref('')
 const showUserDialog = ref(false)
 const selectedUser = ref<any | null>(null)
+
+const showPasswordResetDialog = ref(false)
+const userToResetPassword = ref<any | null>(null)
 
 const users = computed({
   get: () => userStore.currentPageUsers,
@@ -225,6 +229,26 @@ const handleUserSave = async (user: any) => {
     ignoreCache: false
   })
 }
+
+const openPasswordResetDialog = (row: any) => {
+  userToResetPassword.value = row
+  showPasswordResetDialog.value = true
+}
+
+const closePasswordResetDialog = () => {
+  showPasswordResetDialog.value = false
+  userToResetPassword.value = null
+}
+
+// (opcional) refrescar tabela depois do reset
+const handlePasswordResetSuccess = async () => {
+  await userStore.fetchUsers({
+    page: pagination.value.page - 1,
+    size: pagination.value.rowsPerPage,
+    name: nameFilter.value,
+    ignoreCache: true
+  })
+}
 </script>
 
 <template>
@@ -236,8 +260,14 @@ const handleUserSave = async (user: any) => {
     v-model:pagination="pagination"
     :rows-per-page-options="[10, 20, 50, 100]"
     :extra-actions="[
-      { icon: 'vpn_key', tooltip: 'Resetar Senha', emit: 'reset-password' }
-    ]"
+    {
+      icon: 'lock_reset',
+      tooltip: 'Redefinir Senha',
+      emit: 'reset-password',
+      color: 'deep-orange',
+      visible: (row) => row.lifeCycleStatus === 'ACTIVE'
+    }
+  ]"
     :confirm-error="alertError"
     :confirm-delete="alertWarningAction"
     :use-external-edit="true"
@@ -248,6 +278,7 @@ const handleUserSave = async (user: any) => {
     @toggle-status="toggleStatusHandler"
     @edit="openEditDialog"
     @add="openAddDialog"
+    @reset-password="openPasswordResetDialog"
   >
     <template #action-buttons>
       <q-btn outline color="primary" dense icon="ios_share" class="q-ml-sm" @click="$emit('import-users')">
@@ -276,4 +307,15 @@ const handleUserSave = async (user: any) => {
       />
     </q-card>
   </q-dialog>
+
+  <q-dialog v-model="showPasswordResetDialog" persistent>
+  <q-card style="min-width: 600px; max-width: 90vw;">
+    <UserPasswordResetDialog
+      :user="userToResetPassword"
+      @close="closePasswordResetDialog"
+      @updated="handlePasswordResetSuccess" 
+    />
+  </q-card>
+</q-dialog>
+
 </template>

@@ -13,6 +13,8 @@
     :program-options="programOptions"
     :program-activity-options="programActivityOptions"
     :role-options="roleOptions"
+    :hide-search-input="true"
+    :hide-search-button="true"
     :select-options="{ programOptions, programActivityOptions, roleOptions }"
     :extra-actions="roleExtraActions"
     @save="(row, { resolve, reject }) => onSave(row).then(resolve).catch(reject)"
@@ -20,6 +22,8 @@
     @manage-groups="openGroupsDialog"
     @search="onSearch"
     @toggle-status="() => {}"
+    @validation-error="onValidationError"
+    @editing-change="(v) => emit('editing-change', v)"
   />
 
   <!-- Manage groups dialog -->
@@ -86,7 +90,9 @@ import { useSwal } from 'src/composables/shared/dialog/dialog'
 import { useApiErrorHandler } from 'src/composables/shared/error/useApiErrorHandler'
 import { useGroupStore } from 'src/stores/group/groupStore' // ← adjust if your path/name differs
 
-type Row = {
+const isTableEditing = ref(false)
+
+type RowBase = {
   /** Stable key used by the table. We set it = composite key when complete, else temp id. */
   id?: string
   programId: number | null
@@ -107,6 +113,13 @@ type Row = {
   role?: string | null
 }
 
+// metadados adicionados em tempo de execução pelo composable
+type Row = RowBase & {
+  _backup?: RowBase
+  _isNew?: boolean
+}
+
+
 const norm = (v: any) =>
   v === null || v === undefined || v === '' ? '' : String(+v)
 
@@ -119,8 +132,9 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', v: Row[]): void
-}>()
+   (e: 'update:modelValue', v: Row[]): void
+   (e: 'editing-change', v: boolean): void
+ }>()
 
 const { alertWarningAction, alertError } = useSwal()
 const { handleApiError } = useApiErrorHandler()
@@ -176,7 +190,9 @@ const columns = [
     editOptionsKey: 'programOptions',
     editValueField: 'programId',
     placeholder: 'Selecione o programa',
-    required: true
+    required: true,
+    disabled: ({ row }) => !!row.roleUuid,
+    uniqueKey: true
   },
   {
     name: 'programActivityId',
@@ -190,8 +206,9 @@ const columns = [
     dependsOn: 'programId',
     matchField: 'programId',
     required: true,
+    uniqueKey: true
     // example: lock service when role already chosen
-    disabled: ({ row }) => !!row.roleUuid
+    //disabled: ({ row }) => !!row.roleUuid
   },
   {
     name: 'roleUuid',
@@ -202,7 +219,14 @@ const columns = [
     editOptionsKey: 'roleOptions',
     editValueField: 'roleUuid',
     placeholder: 'Selecione a função',
-    required: true
+    required: true,
+    uniqueKey: true,
+    resetOnChangeOf: ['programActivityId'],
+    onReset: ({ row }) => {
+      row.roleUuid = null
+      row.groupUuids = []
+      row.groupNames = []
+    }
   },
   {
     name: 'groups',
@@ -300,36 +324,47 @@ onMounted(async () => {
 
 /* ---------- Save/Delete (composite key) ---------- */
 const onSave = async (row: Row) => {
-  if (!row.programId)         throw new Error('Selecione o Programa.')
-  if (!row.programActivityId) throw new Error('Selecione o Serviço.')
-  if (!row.roleUuid)          throw new Error('Selecione a Função.')
 
-  const k = keyOf(row)                 // composite key for row being saved
-  const selfKey = row.id ?? k          // stable identity for *this* row
+  // chave alvo (após edição)
+  const newKey = keyOf(row)
 
-  // check against parent v-model (committed) OR local table view (on-screen)
-  const isDupIn = (list: Row[] | undefined) =>
-    (list ?? []).some(r => {
-      const otherK   = keyOf(r)
-      if (!otherK) return false
-      const otherId  = (r as any).id ?? otherK
-      const sameRow  = otherId === selfKey       // exclude the same logical row (edits)
-      return !sameRow && otherK === k
-    })
+  // chave original da linha (antes da edição)
+  const originalKey =
+    row._backup ? keyOf(row._backup) : (row.id ?? keyOf(row))
 
-  const dup = isDupIn(props.modelValue) || isDupIn(rows.value)
-  if (dup) {
-    // show message and reject so EditableTable keeps the row in edit mode
-    alertError('Já existe um registo com o mesmo Programa/Serviço/Função.')
+  // contar quantas linhas comprometidas já possuem a *nova* chave
+  const committed = props.modelValue ?? []
+  const occurrences = committed.filter(r => keyOf(r) === newKey).length
+
+  // se estou mudando para chave já existente (e não sou eu mesmo) => duplicado
+  const duplicates = occurrences - (originalKey === newKey ? 1 : 0)
+  if (duplicates > 0) {
+    // Opção A: apenas lançar; EditableTable mostra o alert via confirmError
     throw new Error('Já existe um registo com o mesmo Programa/Serviço/Função.')
   }
 
-  // lock stable id once complete and refresh labels
-  row.id = k
+  // fixar id estável e refrescar labels
+  row.id = newKey
   refreshDerivedNames(row)
 
-  // return updated row to the table resolver
   return { ...row }
+}
+
+const onValidationError = (ev: {
+  kind: 'unique',
+  fields: string[],
+  labels: string[],
+  values: any[],
+  row: Row
+}) => {
+  if (ev.kind !== 'unique') return
+
+  // constrói mensagem amigável usando nomes reais
+  const prog  = programStore.currentPagePrograms.find(p => p.id === ev.row.programId)?.name || 'Programa'
+  const serv  = activityStore.currentPageActivities.find(a => a.id === ev.row.programActivityId)?.name || 'Serviço'
+  const func  = roleStore.currentPageRoles.find(r => r.uuid === ev.row.roleUuid)?.name || 'Função'
+
+  alertError(`Já existe um perfil com a mesma combinação: ${prog} / ${serv} / ${func}.`)
 }
 
 

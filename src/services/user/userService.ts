@@ -145,7 +145,7 @@ export default {
   async save(data: any) {
     try {
       const response = await api.post('/users', data)
-      return response.data
+      return response.data?.data ?? response.data
     } catch (error: any) {
       console.error('Erro na API ao salvar usuário:', error.response?.data || error.message || error)
       throw error
@@ -155,7 +155,7 @@ export default {
   async update(data: any) {
     try {
       const response = await api.put('/users', data)
-      return response.data
+      return response.data?.data ?? response.data
     } catch (error: any) {
       console.error('Erro na API ao atualizar usuário:', error.response?.data || error.message || error)
       throw error
@@ -212,5 +212,12 @@ export default {
   async removeRole(userUuid: string, roleUuid: string, programActivityUuid?: string) {
     const config = programActivityUuid ? { params: { programActivityUuid } } : undefined
     await api.delete(`/users/${userUuid}/roles/${roleUuid}`, config)
+  },
+
+  async updatePassword(uuid: string, newPassword: string) {
+    const response = await api.put(`/users/${uuid}/password`, {
+      newPassword
+    })
+    return response.data
   }
 }
