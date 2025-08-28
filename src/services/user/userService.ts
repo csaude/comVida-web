@@ -219,5 +219,63 @@ export default {
       newPassword
     })
     return response.data
+  },
+
+    /**
+   * Importação em lote de utilizadores.
+   * Espera um array de objetos com os campos do import.
+   * Endpoint sugerido: POST /users/import
+   *
+   * @example payload:
+   * [
+   *   { name: 'Ana', surname: 'Silva', username: 'ana.silva', integratedSystem: 'OpenMRS', idOnIntegratedSystem: 'U123', email: 'ana@x.org', phone: '82...' }
+   * ]
+   */
+  async import(rows: Array<{
+    name: string
+    surname: string
+    username: string
+    integratedSystem?: string | null
+    idOnIntegratedSystem?: string | null
+    email?: string | null
+    phone?: string | null
+  }>) {
+    try {
+      const resp = await api.post('/users/import', rows)
+      // alguns backends envelopam em { data }, outros não — mantém padrão simples
+      return resp.data?.data ?? resp.data
+    } catch (error: any) {
+      console.error('Erro na API ao importar utilizadores:', error?.response?.data || error?.message || error)
+      throw error
+    }
+  },
+
+  /**
+   * (Opcional) Validação prévia no servidor antes de importar.
+   * Útil para detectar duplicados/erros server-side ainda na pré-visualização.
+   * Endpoint sugerido: POST /users/import/validate
+   *
+   * @returns formato livre; exemplo comum:
+   * { valid: [...], invalid: [...], errors: [{ row: 3, message: 'username existente' }] }
+   */
+  async validateImport(rows: Array<{
+    name: string
+    surname: string
+    username: string
+    integratedSystem?: string | null
+    idOnIntegratedSystem?: string | null
+    email?: string | null
+    phone?: string | null
+  }>) {
+    try {
+      const resp = await api.post('/users/import/validate', rows)
+      return resp.data?.data ?? resp.data
+    } catch (error: any) {
+      console.error('Erro na API ao validar importação de utilizadores:',
+        error?.response?.data || error?.message || error)
+      throw error
+    }
   }
+,
+
 }

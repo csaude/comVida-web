@@ -19,7 +19,7 @@
     </div>
 
     <div v-if="currentView === 'import'" class="q-ma-md">
-      <UserImport @imported="handleUserImport" @cancel="closeForm" />
+      <UserImport @imported="handleUserImport" @cancel="closeForm" @close="closeForm" />
     </div>
   </div>
 </template>

@@ -44,7 +44,7 @@ const userStore = useUserStore()
 
 const handlePasswordReset = async () => {
   if (newPassword.value !== confirmPassword.value) {
-    alertError("Senhas não coincidem.")
+    alertError("Senhas não coinscidem.")
     return
   }
 
@@ -60,7 +60,7 @@ const handlePasswordReset = async () => {
 
   const confirmed = await alertWarningAction(
     'Tem certeza que deseja alterar a senha?',
-    'Esta ação não pode ser desfeita.'
+    'Esta acção não pode ser desfeita.'
   )
 
   if (!confirmed) return
