@@ -31,10 +31,25 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, provide, onMounted } from 'vue'
 import CohortScheduleTab from 'components/cohort/CohortScheduleTab.vue'
 import CohortUploadTab from 'components/cohort/CohortUploadTab.vue'
 import CohortProcessingStatus from 'components/cohort/CohortProcessingStatus.vue'
 
+// Props vindos da rota
+const editFileId = ref('')
+const editSourceSystemId = ref('')
+const editProgramActivityId = ref('')
+
+// Fornecendo o fileId para os componentes filhos
+provide('editFileId', editFileId)
+provide('editSourceSystemId', editSourceSystemId)
+provide('editProgramActivityId', editProgramActivityId)
+provide('setTab', (newTab) => {
+  tab.value = newTab
+})
+
 const tab = ref('agendadas')
+
+onMounted(() => {})
 </script>

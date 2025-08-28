@@ -19,7 +19,7 @@ export default {
     params: {
       page?: number
       size?: number
-      status?: string
+      status?: string | string[]
       sort?: string
       [key: string]: any
     } = {},
@@ -40,7 +40,28 @@ export default {
     return response.data
   },
 
-  async uploadFile(formData: any) {
+  async uploadExistingFile(formData: any) {
+    try {
+      const response = await api.put(
+        '/patient-imports/upload-excel',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        },
+      )
+      return response.data
+    } catch (error: any) {
+      console.error(
+        'Erro na API ao salvar arquivo importado:',
+        error.response?.data || error.message || error,
+      )
+      throw error
+    }
+  },
+
+  async uploadNewFile(formData: any) {
     try {
       const response = await api.post(
         '/patient-imports/upload-excel',

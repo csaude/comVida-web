@@ -275,7 +275,23 @@ export default {
         error?.response?.data || error?.message || error)
       throw error
     }
-  }
-,
+  },
+
+  async getFocalPointUsers() {
+    try {
+      const params = new URLSearchParams()
+      params.append('roles', 'VOLUNTARIO')
+
+      const response = await api.get(`/users/by-roles?${params.toString()}`)
+      console.log('Response Focal Points:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error(
+        'Erro na API ao buscar usuários por roles:',
+        error.response?.data || error.message || error,
+      )
+      throw error
+    }
+  },
 
 }

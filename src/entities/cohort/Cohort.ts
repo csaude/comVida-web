@@ -1,6 +1,7 @@
 import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm'
 import { BaseEntity } from '../base/BaseEntity'
 import { ProgramActivity } from '../programActivity/ProgramActivity'
+import { Group } from '../group/Group'
 
 @Entity('cohort')
 export class Cohort extends BaseEntity {
@@ -13,6 +14,10 @@ export class Cohort extends BaseEntity {
   @ManyToOne(() => ProgramActivity, { nullable: false })
   @JoinColumn({ name: 'program_activity_id' })
   programActivity!: ProgramActivity
+
+  @ManyToOne(() => Group, { nullable: false })
+  @JoinColumn({ name: 'group_id' })
+  group!: Group
 
   @Column('timestamp', { nullable: true })
   inclusionDate?: Date
@@ -35,6 +40,10 @@ export class Cohort extends BaseEntity {
         !(init.programActivity instanceof ProgramActivity)
       ) {
         this.programActivity = ProgramActivity.fromDTO(init.programActivity)
+      }
+
+      if (init.group && !(init.group instanceof Group)) {
+        this.group = Group.fromDTO(init.group)
       }
     }
   }
@@ -69,6 +78,10 @@ export class Cohort extends BaseEntity {
       entity.programActivity = ProgramActivity.fromDTO(dto.programActivity)
     }
 
+    if (dto.group) {
+      entity.group = Group.fromDTO(dto.group)
+    }
+
     entity.programActivityName = dto.programActivity?.name
 
     return entity
@@ -84,6 +97,7 @@ export class Cohort extends BaseEntity {
       description: this.description,
       programActivity: this.programActivity?.toDTO() ?? null,
       programActivityName: this.programActivity?.name ?? null,
+      group: this.group?.toDTO() ?? null,
     }
   }
 }

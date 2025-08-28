@@ -131,7 +131,7 @@ export const usePatientImportFileStore = defineStore('patientImportFile', {
         formData.append('file', file)
         formData.append('dto', JSON.stringify(dtoToSend))
 
-        const savedDto = await PatientImportFileService.uploadFile(formData)
+        const savedDto = await PatientImportFileService.uploadNewFile(formData)
         const saved = PatientImportFile.fromDTO(savedDto)
 
         const page = this.pagination.currentPage
@@ -153,6 +153,49 @@ export const usePatientImportFileStore = defineStore('patientImportFile', {
         this.error = 'Erro ao salvar arquivo importado'
         console.error(
           'Erro ao salvar:',
+          error.response?.data || error.message || error,
+        )
+        throw error
+      }
+    },
+
+    async updateImportFile(
+      id: number,
+      data: Partial<PatientImportFile>,
+      file: File,
+    ) {
+      this.error = null
+      try {
+        const dtoToSend =
+          data instanceof PatientImportFile
+            ? data.toDTO()
+            : new PatientImportFile(data).toDTO()
+
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('dto', JSON.stringify(dtoToSend))
+
+        const updatedDto =
+          await PatientImportFileService.uploadExistingFile(formData)
+        const updated = PatientImportFile.fromDTO(updatedDto)
+
+        const page = this.pagination.currentPage
+        if (this.importFilesPages[page]) {
+          const index = this.importFilesPages[page].findIndex(
+            (f) => f.id === updated.id,
+          )
+          if (index !== -1) {
+            this.importFilesPages[page][index] = updated
+          }
+          this.currentImportFiles = this.importFilesPages[page]
+        }
+
+        this.currentImportFile = updated
+        return updated
+      } catch (error: any) {
+        this.error = 'Erro ao atualizar arquivo importado'
+        console.error(
+          'Erro ao atualizar:',
           error.response?.data || error.message || error,
         )
         throw error

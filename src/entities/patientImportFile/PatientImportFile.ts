@@ -2,6 +2,7 @@ import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm'
 import { BaseEntity } from '../base/BaseEntity'
 import { ProgramActivity } from '../programActivity/ProgramActivity'
 import { SourceSystem } from '../source/SourceSystem'
+import { Group } from '../group/Group'
 
 export enum ImportStatus {
   PENDING = 'PENDING',
@@ -31,6 +32,10 @@ export class PatientImportFile extends BaseEntity {
   @ManyToOne(() => ProgramActivity, { nullable: false })
   @JoinColumn({ name: 'program_activity_id' })
   programActivity!: ProgramActivity
+
+  @ManyToOne(() => Group, { nullable: false })
+  @JoinColumn({ name: 'group_id' })
+  group!: Group
 
   @ManyToOne(() => SourceSystem, { nullable: false })
   @JoinColumn({ name: 'source_system_id' })
@@ -67,6 +72,11 @@ export class PatientImportFile extends BaseEntity {
       })
     }
 
+    // Adaptação segura de group
+    if (dto.group?.id) {
+      entity.group = new Group({ id: dto.group.id })
+    }
+
     // Adaptação segura de sourceSystem
     if (dto.sourceSystem?.id) {
       entity.sourceSystem = new SourceSystem({ id: dto.sourceSystem.id })
@@ -93,6 +103,8 @@ export class PatientImportFile extends BaseEntity {
       programActivity: this.programActivity?.id
         ? { id: this.programActivity.id }
         : null,
+
+      group: this.group?.id ? { id: this.group.id } : null,
 
       sourceSystem: this.sourceSystem?.id ? { id: this.sourceSystem.id } : null,
     }

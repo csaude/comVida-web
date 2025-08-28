@@ -28,9 +28,10 @@
             option-label="name"
             option-value="id"
             label="Programa"
-            class="col-4"
+            class="col-3"
             dense
             outlined
+            :disable="editProgramActivityId !== ''"
           />
 
           <q-select
@@ -39,9 +40,22 @@
             option-label="label"
             option-value="value"
             label="Serviço"
-            class="col-4"
+            class="col-3"
             dense
             outlined
+            :disable="editProgramActivityId !== '' || !selectedProgram"
+          />
+
+          <q-select
+            v-model="selectedGroup"
+            :options="groupOptions"
+            option-label="name"
+            option-value="id"
+            label="Grupo"
+            class="col-3"
+            dense
+            outlined
+            :disable="!selectedService"
           />
 
           <q-select
@@ -50,9 +64,10 @@
             option-label="code"
             option-value="id"
             label="Sistema Fonte"
-            class="col-4"
+            class="col-3"
             dense
             outlined
+            :disable="editSourceSystemId !== ''"
           />
         </div>
 
@@ -186,7 +201,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, inject, nextTick } from 'vue'
 import * as XLSX from 'xlsx'
 import { useProgramStore } from 'src/stores/program/ProgramStore'
 import { useProgramActivityStore } from 'src/stores/programActivity/ProgramActivityStore'
@@ -195,7 +210,9 @@ import { PatientImportFile } from 'src/entities/patientImportFile/PatientImportF
 import { useSourceSystemStore } from 'src/stores/source/SourceSystemStore'
 import { useCohortStore } from 'src/stores/cohort/useCohortStore'
 import { useEligibilityCriteriaStore } from 'src/stores/eligibility/eligibilityCriteriaStore'
+import { useGroupStore } from 'src/stores/group/groupStore'
 
+const groupStore = useGroupStore()
 const importFileStore = usePatientImportFileStore()
 const sourceSystemStore = useSourceSystemStore()
 const programStore = useProgramStore()
@@ -211,6 +228,12 @@ const hasErrors = computed(() => {
   )
 })
 
+// Fazendo inject do fileId e sourceSystemId (Para situacoes em que chegamos neste componente para recarregar listas)
+const editSourceSystemId = inject('editSourceSystemId')
+const editFileId = inject('editFileId')
+const editProgramActivityId = inject('editProgramActivityId')
+const selectedGroup = ref(null)
+
 const sheetValidationErrors = ref([]) // sheets inválidas
 const patientValidationErrors = ref([]) // erros nas linhas
 
@@ -221,6 +244,15 @@ const cohorts = computed(() => cohortStore.getAllCohortsAcrossPages())
 const eligibilityCriterias = computed(() =>
   eligibilityCriteriaStore.getAllCriteriasAcrossPages(),
 )
+
+const groupOptions = computed(() => {
+  if (!selectedService.value) return []
+  const allGroups = Object.values(groupStore.groupsPages).flat()
+  return allGroups.filter(
+    (group) => group.programActivity.id === selectedService.value.value,
+  )
+})
+
 const selectedProgram = ref(null)
 const selectedService = ref(null)
 const selectedSystem = ref(null)
@@ -302,6 +334,7 @@ function validateEligibilityCategories(sheetData) {
 }
 
 function uploadList() {
+  console.log('uploadList: ', selectedGroup.value)
   if (!file.value) return
 
   const reader = new FileReader()
@@ -318,14 +351,32 @@ function uploadList() {
     const allNids = new Set()
 
     workbook.SheetNames.forEach((sheetName) => {
-      const matchedCohort = cohorts.value.find(
-        (c) => c.name.trim().toLowerCase() === sheetName.trim().toLowerCase(),
-      )
-      if (!matchedCohort) {
+      const [groupName, cohortName] = sheetName.split('_') || []
+
+      if (!groupName || !cohortName) {
         sheetValidationErrors.value.push(
-          `"${sheetName}" (não corresponde a nenhuma Cohort cadastrada para o serviço "${selectedService.value?.label}")`,
+          `"${sheetName}" está no formato inválido. Use "Grupo_Servico".`,
         )
-        // return
+      } else {
+        const matchedGroup = groupOptions.value.find(
+          (g) => g.name.trim().toLowerCase() === groupName.trim().toLowerCase(),
+        )
+        const matchedCohort = cohorts.value.find(
+          (c) =>
+            c.name.trim().toLowerCase() === cohortName.trim().toLowerCase(),
+        )
+
+        if (!matchedGroup) {
+          sheetValidationErrors.value.push(
+            `"${groupName}" não corresponde a nenhum Grupo para o serviço "${selectedService.value?.label}".`,
+          )
+        }
+
+        if (!matchedCohort) {
+          sheetValidationErrors.value.push(
+            `"${cohortName}" não corresponde a nenhuma Cohort cadastrada.`,
+          )
+        }
       }
 
       const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
@@ -379,7 +430,6 @@ function uploadList() {
           Mensagem: mensagens.join('; '),
         })
       }
-      console.log('patientValidationErrors', patientValidationErrors.value)
 
       sheetsData[sheetName] = validatedRows
       sheetsColumns[sheetName] = generateColumns(validatedRows)
@@ -405,8 +455,8 @@ async function savePatientImportFile() {
 
   saving.value = true
   try {
-    console.log('Salvando ficheiro de importação:', selectedSystem.value)
     const importFile = new PatientImportFile({
+      id: editFileId.value || null,
       name: file.value.name,
       status: 'PENDING',
       progress: 0,
@@ -415,9 +465,21 @@ async function savePatientImportFile() {
         id: selectedService.value.value || selectedService.value.id,
       },
       sourceSystem: selectedSystem.value,
+      group: selectedGroup.value ? { id: selectedGroup.value.id } : null,
     })
 
-    const saved = await importFileStore.saveImportFile(importFile, file.value)
+    if (editFileId.value) {
+      // fluxo de atualização
+      console.log('editFileId.value', editFileId.value)
+      await importFileStore.updateImportFile(
+        editFileId.value,
+        importFile,
+        file.value,
+      )
+    } else {
+      // fluxo de criação
+      await importFileStore.saveImportFile(importFile, file.value)
+    }
   } catch (err) {
     console.error('❌ Erro ao importar ficheiro:', err)
   } finally {
@@ -430,6 +492,10 @@ watch(file, () => {
   columnsPerSheet.value = {}
   sheetNames.value = []
   activeTab.value = null
+})
+
+watch(selectedService, () => {
+  selectedGroup.value = null
 })
 
 watch(selectedProgram, () => {
@@ -447,11 +513,46 @@ onMounted(async () => {
     await sourceSystemStore.fetchSourceSystems()
   }
   if (!cohortStore.currentPageCohorts.length) {
-    console.log('Fetching cohorts on mount')
     await cohortStore.fetchCohorts({ page: 0, size: 500 })
   }
   if (!eligibilityCriteriaStore.currentPageCriterias.length) {
     await eligibilityCriteriaStore.fetchCriterias({ page: 0, size: 500 })
+  }
+  if (!Object.keys(groupStore.groupsPages).length) {
+    await groupStore.fetchGroups({ page: 0, size: 500 })
+  }
+
+  if (editSourceSystemId.value) {
+    const matchedSystem = sourceSystemOptions.value.find(
+      (sys) => sys.id === editSourceSystemId.value,
+    )
+    if (matchedSystem) {
+      selectedSystem.value = matchedSystem
+    }
+  }
+
+  if (editProgramActivityId.value) {
+    const matchedActivity = activityStore.currentPageActivities.find(
+      (act) => act.id === editProgramActivityId.value,
+    )
+
+    if (matchedActivity) {
+      // Primeiro seleciona o programa
+      const matchedProgram = programOptions.value.find(
+        (prog) => prog.id === matchedActivity.program.id,
+      )
+      if (matchedProgram) {
+        selectedProgram.value = matchedProgram
+
+        // Aguarda a reatividade para atualizar o serviceOptions
+        await nextTick()
+
+        // Depois seleciona o serviço
+        selectedService.value = serviceOptions.value.find(
+          (serv) => serv.value === matchedActivity.id,
+        )
+      }
+    }
   }
 })
 </script>
