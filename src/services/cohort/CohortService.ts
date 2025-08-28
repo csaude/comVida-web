@@ -25,6 +25,7 @@ export default {
     } = {},
   ) {
     const response = await api.get('/cohorts/with-members', { params })
+    console.log('Response from cohortsWithMembers:', response.data)
     return response.data
   },
 

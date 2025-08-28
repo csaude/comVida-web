@@ -16,6 +16,7 @@
       hide-delete="true"
       :extra-actions="extraActions"
       @view-sheet="handleViewSheet"
+      @edit-file="handleEditFile"
     >
       <template #action-buttons>
         <div class="row items-center q-gutter-md q-mb-md">
@@ -105,9 +106,9 @@
                   <div class="absolute-full flex flex-center">
                     <q-badge
                       :color="
-                        props.row.status === 'FAILED' ? 'red-6' : 'primary'
+                        props.row.status === 'FAILED' ? 'grey-5' : 'primary'
                       "
-                      text-color="white"
+                      text-color="Yellow-10"
                       :label="progressLabel(props.row.progress)"
                     />
                   </div>
@@ -124,15 +125,19 @@
   </q-dialog>
 </template>
 
-<script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+<script setup>
+import { ref, onMounted, inject } from 'vue'
 import { usePatientImportFileStore } from 'src/stores/patientImportFile/PatientImportFileStore'
-import { PatientImportFile } from 'src/entities/patientImportFile/PatientImportFile'
 import { useSwal } from 'src/composables/shared/dialog/dialog'
-import type { QTableColumn } from 'quasar'
 
 const store = usePatientImportFileStore()
 const { alertWarningAction } = useSwal()
+
+const editSourceSystemId = inject('editSourceSystemId')
+const editFileId = inject('editFileId')
+const editProgramActivityId = inject('editProgramActivityId')
+
+const setTab = inject('setTab', () => {})
 
 const emit = defineEmits([
   'edit-user',
@@ -150,19 +155,34 @@ const pagination = ref({
 })
 
 const selectedFileName = ref('')
-const rows = ref<PatientImportFile[]>([])
+const rows = ref([])
 
 const filters = ref({
   name: '',
-  statuses: [] as string[], // sem 'ALL'
+  statuses: [],
 })
+
+function handleEditFile(row) {
+  editFileId.value = row.id
+  editSourceSystemId.value = row.sourceSystem?.id
+  editProgramActivityId.value = row.programActivity?.id
+
+  setTab('listas')
+}
 
 const extraActions = [
   {
     icon: 'visibility',
     color: 'primary',
-    tooltip: 'Visualizar Cohort',
-    emit: 'view-sheet', // 👈 Nome do evento emitido
+    tooltip: 'Pcessamento Parcial',
+    emit: 'view-sheet',
+    visible: () => true,
+  },
+  {
+    icon: 'edit',
+    color: 'orange',
+    tooltip: 'Recarregar Ficheiro',
+    emit: 'edit-file',
     visible: () => true,
   },
 ]
@@ -172,10 +192,8 @@ function handleViewSheet(row) {
   showSheetDetails(row)
 }
 
-function progressLabel(progress: number): string {
-  const p = progress.toFixed(0) + '%'
-  console.log('Progress label:', p)
-  return p
+function progressLabel(progress) {
+  return progress.toFixed(0) + '%'
 }
 
 const statusOptions = [
@@ -183,6 +201,8 @@ const statusOptions = [
   { label: 'Processando', value: 'PROCESSING' },
   { label: 'Concluído', value: 'PROCESSED' },
   { label: 'Falhou', value: 'FAILED' },
+  { label: 'Actualizado', value: 'UPDATED' },
+  { label: 'Interrompido', value: 'INTERRUPTED' },
 ]
 
 const columns = [
@@ -192,55 +212,57 @@ const columns = [
     label: 'Estado',
     field: 'status',
     align: 'left',
-    format: (val: string) => statusLabel(val),
+    format: (val) => statusLabel(val),
   },
   {
     name: 'progress',
     label: 'Progresso',
     field: 'progress',
     align: 'left',
-    format: (val: number) => `${val}%`,
+    format: (val) => `${val}%`,
     style: 'min-width: 150px;',
   },
   { name: 'message', label: 'Mensagem', field: 'message', align: 'left' },
   {
     name: 'createdAt',
     label: 'Criado em',
-    field: (row: PatientImportFile) => new Date(row.createdAt).toLocaleString(),
+    field: (row) => new Date(row.createdAt).toLocaleString(),
     align: 'left',
   },
   {
     name: 'actions',
-    label: 'Ações',
+    label: 'Acções',
     field: 'uuid',
     align: 'center',
     sortable: false,
   },
 ]
 
-function statusLabel(status: string) {
+function statusLabel(status) {
   return (
     {
       PENDING: 'Pendente',
       PROCESSING: 'Processando',
       PROCESSED: 'Concluído',
       FAILED: 'Falhou',
+      UPDATED: 'Atualizado',
+      INTERRUPTED: 'Interrompido',
     }[status] || status
   )
 }
 
 const dialogVisible = ref(false)
-const sheetRows = ref<any[]>([])
+const sheetRows = ref([])
 const sheetLoading = ref(false)
 
-const sheetColumns: QTableColumn[] = [
+const sheetColumns = [
   { name: 'sheetName', label: 'Cohort', field: 'sheetName', align: 'left' },
   {
     name: 'status',
     label: 'Estado',
     field: 'status',
     align: 'left',
-    format: (val: string) => statusLabel(val),
+    format: (val) => statusLabel(val),
   },
   {
     name: 'progress',
@@ -251,14 +273,14 @@ const sheetColumns: QTableColumn[] = [
   { name: 'message', label: 'Mensagem', field: 'message', align: 'left' },
 ]
 
-async function showSheetDetails(file: PatientImportFile) {
+async function showSheetDetails(file) {
   dialogVisible.value = true
   sheetLoading.value = true
   sheetRows.value = []
 
   try {
-    await store.fetchSheetStatuses(file.id!)
-    sheetRows.value = store.sheetStatuses?.map((s: any) => ({
+    await store.fetchSheetStatuses(file.id)
+    sheetRows.value = store.sheetStatuses?.map((s) => ({
       sheetName: s.sheetName,
       status: s.status,
       progress: s.progress,
@@ -277,7 +299,7 @@ function clearNameSearch() {
 
 function emitSearch() {
   const selectedStatuses = filters.value.statuses
-
+  console.log('Selected statuses:', selectedStatuses)
   pagination.value.page = 1
 
   handleSearch({
@@ -286,12 +308,12 @@ function emitSearch() {
   })
 }
 
-async function handleSearch(filter: { name: string; statuses: string[] }) {
+async function handleSearch(filter) {
   await store.fetchImportFiles({
     page: pagination.value.page - 1,
     size: pagination.value.rowsPerPage,
     name: filter.name,
-    status: filter.statuses.join(','), // se vazio, backend deve entender como "todos"
+    status: filter.statuses.join(','),
     ignoreCache: true,
   })
 
@@ -299,23 +321,26 @@ async function handleSearch(filter: { name: string; statuses: string[] }) {
   pagination.value.rowsNumber = store.pagination.totalSize
 }
 
-function handlePaginationChange(newPagination: any) {
+function handlePaginationChange(newPagination) {
   pagination.value.page = newPagination.page
   pagination.value.rowsPerPage = newPagination.rowsPerPage
   emitSearch()
 }
 
-async function deleteFile(file: PatientImportFile) {
+async function deleteFile(file) {
   const confirm = await alertWarningAction(
     'Deseja realmente apagar este ficheiro?',
   )
   if (!confirm) return
 
-  await store.deleteImportFile(file.uuid!)
+  await store.deleteImportFile(file.uuid)
   emitSearch()
 }
 
 onMounted(() => {
+  editFileId.value = ''
+  editSourceSystemId.value = ''
+  editProgramActivityId.value = ''
   filters.value.statuses = statusOptions.map((opt) => opt.value)
   emitSearch()
 })

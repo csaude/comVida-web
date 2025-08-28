@@ -11,6 +11,8 @@ export const useUserStore = defineStore('user', {
     usersPages: {} as Record<number, User[]>,
     currentPageUsers: [] as User[],
     currentUser: null as User | null,
+    volunteerUsers: [] as User[],
+    volunteerUsersLoaded: false,
 
     // Auth
     isAuthenticated: false,
@@ -24,17 +26,20 @@ export const useUserStore = defineStore('user', {
       totalSize: 0,
       totalPages: 0,
       currentPage: 0,
-      pageSize: 100
+      pageSize: 100,
     },
 
     // ===== NEW: UserServiceRole listings (per userUuid) =====
-    userServiceRolePagesByUser: {} as Record<string, Record<number, UserServiceRole[]>>,
+    userServiceRolePagesByUser: {} as Record<
+      string,
+      Record<number, UserServiceRole[]>
+    >,
     currentPageUserServiceRoles: [] as UserServiceRole[],
     userServiceRolePagination: {
       totalSize: 0,
       totalPages: 0,
       currentPage: 0,
-      pageSize: 100
+      pageSize: 100,
     },
 
     // ===== NEW: User Roles listings (per userUuid) =====
@@ -44,9 +49,9 @@ export const useUserStore = defineStore('user', {
       totalSize: 0,
       totalPages: 0,
       currentPage: 0,
-      pageSize: 100
+      pageSize: 100,
     },
-    authAttrs: null as AuthAttributes | null
+    authAttrs: null as AuthAttributes | null,
   }),
 
   getters: {
@@ -58,16 +63,21 @@ export const useUserStore = defineStore('user', {
 
     /** Grupos agregados a partir dos vínculos (userServiceRoleGroups, novo payload) */
     groupsFromServiceRoles: (s) => {
-      const out: { uuid: string; name?: string; programActivityUuid?: string; programActivityId?: number }[] = []
+      const out: {
+        uuid: string
+        name?: string
+        programActivityUuid?: string
+        programActivityId?: number
+      }[] = []
       for (const sr of s.authAttrs?.serviceRoles ?? []) {
         for (const g of sr.userServiceRoleGroups ?? []) {
           if (!g?.uuid) continue
-          if (!out.find(x => x.uuid === g.uuid)) {
+          if (!out.find((x) => x.uuid === g.uuid)) {
             out.push({
               uuid: g.uuid,
               name: g.name,
               programActivityUuid: g.programActivityUuid,
-              programActivityId: g.programActivityId
+              programActivityId: g.programActivityId,
             })
           }
         }
@@ -77,20 +87,24 @@ export const useUserStore = defineStore('user', {
 
     /** Nomes de roles (compatível com legado e novo) */
     roles: (s) => {
-      const legacy = (s.authAttrs?.grants ?? []).map(g => g.roleName).filter(Boolean) as string[]
+      const legacy = (s.authAttrs?.grants ?? [])
+        .map((g) => g.roleName)
+        .filter(Boolean) as string[]
       const fromSR = (s.authAttrs?.serviceRoles ?? [])
-        .map(sr => sr.role?.name)
+        .map((sr) => sr.role?.name)
         .filter(Boolean) as string[]
       return Array.from(new Set([...legacy, ...fromSR]))
     },
 
     /** Verifica role por NOME **ou** CÓDIGO (novo), mantendo compatibilidade */
     hasRole: (s) => (roleCodeOrName: string) => {
-      const inSR =
-        (s.authAttrs?.serviceRoles ?? []).some(sr =>
-          sr.role?.code === roleCodeOrName || sr.role?.name === roleCodeOrName
-        )
-      const inLegacy = (s.authAttrs?.grants ?? []).some(g => g.roleName === roleCodeOrName)
+      const inSR = (s.authAttrs?.serviceRoles ?? []).some(
+        (sr) =>
+          sr.role?.code === roleCodeOrName || sr.role?.name === roleCodeOrName,
+      )
+      const inLegacy = (s.authAttrs?.grants ?? []).some(
+        (g) => g.roleName === roleCodeOrName,
+      )
       return inSR || inLegacy
     },
 
@@ -98,37 +112,48 @@ export const useUserStore = defineStore('user', {
     inGroup(this: any, state) {
       return (uuid: string) => {
         if ((state.authAttrs?.groupUuids ?? []).includes(uuid)) return true
-        return this.groupsFromServiceRoles.some((g: { uuid: string }) => g.uuid === uuid)
+        return this.groupsFromServiceRoles.some(
+          (g: { uuid: string }) => g.uuid === uuid,
+        )
       }
     },
 
     /** Acesso por ID de ProgramActivity (compatível: legado + novo) */
     canAccessProgramActivity: (s) => (paId?: number | null) => {
       if (!paId) return true // global
-      const legacy = (s.authAttrs?.grants ?? []).some(g => g.programActivityId === paId)
-      const viaSR = (s.authAttrs?.serviceRoles ?? []).some(sr => sr.programActivity?.id === paId)
+      const legacy = (s.authAttrs?.grants ?? []).some(
+        (g) => g.programActivityId === paId,
+      )
+      const viaSR = (s.authAttrs?.serviceRoles ?? []).some(
+        (sr) => sr.programActivity?.id === paId,
+      )
       return legacy || viaSR
     },
 
     /** Acesso por UUID de ProgramActivity (novo) */
     canAccessProgramActivityUuid: (s) => (paUuid?: string | null) => {
       if (!paUuid) return true // global
-      const viaSR = (s.authAttrs?.serviceRoles ?? []).some(sr => sr.programActivity?.uuid === paUuid)
-      const legacy = (s.authAttrs?.grants ?? []).some(g => g.programActivityUuid === paUuid)
+      const viaSR = (s.authAttrs?.serviceRoles ?? []).some(
+        (sr) => sr.programActivity?.uuid === paUuid,
+      )
+      const legacy = (s.authAttrs?.grants ?? []).some(
+        (g) => g.programActivityUuid === paUuid,
+      )
       return viaSR || legacy
     },
 
     /** Verifica role em um PROGRAMA específico (usa role code OU name). Se programUuid for omitido, exige role global (sem programa). */
-    hasRoleInProgram: (s) => (roleCodeOrName: string, programUuid?: string | null) => {
-      return (s.authAttrs?.serviceRoles ?? []).some(sr => {
-        const roleOk = sr.role?.code === roleCodeOrName || sr.role?.name === roleCodeOrName
-        if (!roleOk) return false
-        const pUuid = sr.programActivity?.program?.uuid
-        return programUuid ? pUuid === programUuid : !pUuid // se não informar programa, exige global
-      })
-    }
+    hasRoleInProgram:
+      (s) => (roleCodeOrName: string, programUuid?: string | null) => {
+        return (s.authAttrs?.serviceRoles ?? []).some((sr) => {
+          const roleOk =
+            sr.role?.code === roleCodeOrName || sr.role?.name === roleCodeOrName
+          if (!roleOk) return false
+          const pUuid = sr.programActivity?.program?.uuid
+          return programUuid ? pUuid === programUuid : !pUuid // se não informar programa, exige global
+        })
+      },
   },
-
 
   actions: {
     // ======================
@@ -183,7 +208,7 @@ export const useUserStore = defineStore('user', {
         name?: string
         ignoreCache?: boolean
         [key: string]: any
-      } = {}
+      } = {},
     ) {
       const page = params.page ?? 0
       const size = params.size ?? this.pagination.pageSize
@@ -203,9 +228,16 @@ export const useUserStore = defineStore('user', {
       this.error = null
 
       try {
-        const response = await UserService.getAll({ ...params, page, size, name })
+        const response = await UserService.getAll({
+          ...params,
+          page,
+          size,
+          name,
+        })
         console.log('Fetched users:', response)
-        const users = (response.content ?? []).map((dto: any) => User.fromDTO(dto))
+        const users = (response.content ?? []).map((dto: any) =>
+          User.fromDTO(dto),
+        )
 
         if (!isSearch) this.usersPages[page] = users
         this.currentPageUsers = users
@@ -214,7 +246,7 @@ export const useUserStore = defineStore('user', {
           totalSize: response.total,
           totalPages: Math.ceil(response.total / size),
           currentPage: response.page,
-          pageSize: response.size
+          pageSize: response.size,
         }
       } catch (error: any) {
         this.error = 'Erro ao buscar usuários'
@@ -243,7 +275,9 @@ export const useUserStore = defineStore('user', {
       try {
         // 1) Monta dto e detecta se é criação
         const dtoToSend =
-          userData instanceof User ? userData.toDTO() : new User(userData).toDTO()
+          userData instanceof User
+            ? userData.toDTO()
+            : new User(userData).toDTO()
         const isNew = !dtoToSend.id
 
         console.log('Saving user data:', dtoToSend)
@@ -263,31 +297,35 @@ export const useUserStore = defineStore('user', {
         // 4) Helpers reativos
         const replaceOrInsert = (arr?: User[]) => {
           if (!Array.isArray(arr)) return false
-          const idx = arr.findIndex(u => u?.uuid === saved.uuid)
+          const idx = arr.findIndex((u) => u?.uuid === saved.uuid)
           if (idx >= 0) {
-            arr.splice(idx, 1, saved)   // garante reatividade
-            return false                // já existia (edição)
+            arr.splice(idx, 1, saved) // garante reatividade
+            return false // já existia (edição)
           } else {
-            arr.unshift(saved)          // novo registro entra no topo
-            return true                 // inseriu novo
+            arr.unshift(saved) // novo registro entra no topo
+            return true // inseriu novo
           }
         }
 
         // 5) Atualiza TODAS as páginas cacheadas
         let insertedSomewhere = false
         for (const key of Object.keys(this.usersPages)) {
-          insertedSomewhere = replaceOrInsert(this.usersPages[key]) || insertedSomewhere
+          insertedSomewhere =
+            replaceOrInsert(this.usersPages[key]) || insertedSomewhere
         }
 
         // 6) Atualiza SEMPRE a página atual na UI
-        insertedSomewhere = replaceOrInsert(this.currentPageUsers) || insertedSomewhere
+        insertedSomewhere =
+          replaceOrInsert(this.currentPageUsers) || insertedSomewhere
         // força reatividade de quem observa o array
         this.currentPageUsers = [...this.currentPageUsers]
 
         // 7) Ajusta paginação se foi criação e inserimos na lista
         if (isNew && insertedSomewhere) {
           this.pagination.totalSize += 1
-          this.pagination.totalPages = Math.ceil(this.pagination.totalSize / this.pagination.pageSize)
+          this.pagination.totalPages = Math.ceil(
+            this.pagination.totalSize / this.pagination.pageSize,
+          )
         }
 
         // 8) Seleção atual
@@ -298,21 +336,23 @@ export const useUserStore = defineStore('user', {
         console.error(error.response?.data || error.message || error)
         throw error
       }
-    }
-    ,
-
+    },
     async updateUserLifeCycleStatus(uuid: string, lifeCycleStatus: string) {
       this.error = null
       try {
-        const updatedDto = await UserService.updateLifeCycleStatus(uuid, lifeCycleStatus)
+        const updatedDto = await UserService.updateLifeCycleStatus(
+          uuid,
+          lifeCycleStatus,
+        )
         const updatedUser = User.fromDTO(updatedDto)
 
         for (const page in this.usersPages) {
-          const index = this.usersPages[page].findIndex(u => u.uuid === uuid)
+          const index = this.usersPages[page].findIndex((u) => u.uuid === uuid)
           if (index !== -1) this.usersPages[page][index] = updatedUser
         }
 
-        this.currentPageUsers = this.usersPages[this.pagination.currentPage] ?? []
+        this.currentPageUsers =
+          this.usersPages[this.pagination.currentPage] ?? []
         if (this.currentUser?.uuid === uuid) this.currentUser = updatedUser
         return updatedUser
       } catch (error: any) {
@@ -331,29 +371,44 @@ export const useUserStore = defineStore('user', {
         let removedSomewhere = false
         for (const pageKey of Object.keys(this.usersPages)) {
           const before = this.usersPages[pageKey].length
-          this.usersPages[pageKey] = this.usersPages[pageKey].filter(u => u.uuid !== uuid)
-          if (this.usersPages[pageKey].length !== before) removedSomewhere = true
+          this.usersPages[pageKey] = this.usersPages[pageKey].filter(
+            (u) => u.uuid !== uuid,
+          )
+          if (this.usersPages[pageKey].length !== before)
+            removedSomewhere = true
         }
 
         // Reaponta a página atual para o cache se existir; senão, filtra localmente
         const cached = this.usersPages[this.pagination.currentPage]
-        this.currentPageUsers = cached ? cached : this.currentPageUsers.filter(u => u.uuid !== uuid)
+        this.currentPageUsers = cached
+          ? cached
+          : this.currentPageUsers.filter((u) => u.uuid !== uuid)
 
         if (this.currentUser?.uuid === uuid) this.currentUser = null
 
         // 2) Atualiza a paginação local (sabemos que apagou no servidor)
-        this.pagination.totalSize = Math.max(0, (this.pagination.totalSize || 0) - 1)
-        this.pagination.totalPages = this.pagination.pageSize > 0
-          ? Math.ceil(this.pagination.totalSize / this.pagination.pageSize)
-          : 0
+        this.pagination.totalSize = Math.max(
+          0,
+          (this.pagination.totalSize || 0) - 1,
+        )
+        this.pagination.totalPages =
+          this.pagination.pageSize > 0
+            ? Math.ceil(this.pagination.totalSize / this.pagination.pageSize)
+            : 0
 
         // 3) Se a página atual ficou inválida (ex.: caiu de 3 para 2), recua
-        if (this.pagination.currentPage >= this.pagination.totalPages && this.pagination.totalPages > 0) {
+        if (
+          this.pagination.currentPage >= this.pagination.totalPages &&
+          this.pagination.totalPages > 0
+        ) {
           this.pagination.currentPage = this.pagination.totalPages - 1
         }
 
         // 4) Se a página atual está vazia, tenta recuar uma página
-        if (this.currentPageUsers.length === 0 && this.pagination.currentPage > 0) {
+        if (
+          this.currentPageUsers.length === 0 &&
+          this.pagination.currentPage > 0
+        ) {
           this.pagination.currentPage -= 1
         }
 
@@ -362,24 +417,28 @@ export const useUserStore = defineStore('user', {
           page: this.pagination.currentPage,
           size: this.pagination.pageSize,
           name: opts.name ?? '',
-          ignoreCache: true
+          ignoreCache: true,
         })
       } catch (error: any) {
-        const apiMessage = error?.response?.data?.message || 'Erro ao apagar usuário'
+        const apiMessage =
+          error?.response?.data?.message || 'Erro ao apagar usuário'
         this.error = apiMessage
         console.error(error)
         throw error
       }
-    }
-    ,
-
+    },
     // ==========================================
     // NEW: Roles do utilizador (via UserController)
     // ==========================================
 
     async fetchUserServiceRoles(
       userUuid: string,
-      params: { page?: number; size?: number; sort?: string; ignoreCache?: boolean } = {}
+      params: {
+        page?: number
+        size?: number
+        sort?: string
+        ignoreCache?: boolean
+      } = {},
     ) {
       const page = params.page ?? 0
       const size = params.size ?? this.userServiceRolePagination.pageSize
@@ -397,8 +456,14 @@ export const useUserStore = defineStore('user', {
       this.loading = true
       this.error = null
       try {
-        const response = await UserService.getUserServiceRoles(userUuid, { ...params, page, size })
-        const rows = (response.content ?? []).map((dto: any) => UserServiceRole.fromDTO(dto))
+        const response = await UserService.getUserServiceRoles(userUuid, {
+          ...params,
+          page,
+          size,
+        })
+        const rows = (response.content ?? []).map((dto: any) =>
+          UserServiceRole.fromDTO(dto),
+        )
 
         pagesForUser[page] = rows
         this.userServiceRolePagesByUser[userUuid] = pagesForUser
@@ -408,7 +473,7 @@ export const useUserStore = defineStore('user', {
           totalSize: response.total,
           totalPages: Math.ceil(response.total / size),
           currentPage: response.page,
-          pageSize: response.size
+          pageSize: response.size,
         }
       } catch (e: any) {
         this.error = 'Erro ao buscar vínculos de roles do utilizador'
@@ -420,7 +485,12 @@ export const useUserStore = defineStore('user', {
 
     async fetchUserRoles(
       userUuid: string,
-      params: { page?: number; size?: number; sort?: string; ignoreCache?: boolean } = {}
+      params: {
+        page?: number
+        size?: number
+        sort?: string
+        ignoreCache?: boolean
+      } = {},
     ) {
       const page = params.page ?? 0
       const size = params.size ?? this.userRolesPagination.pageSize
@@ -438,8 +508,14 @@ export const useUserStore = defineStore('user', {
       this.loading = true
       this.error = null
       try {
-        const response = await UserService.getUserRoles(userUuid, { ...params, page, size })
-        const roles = (response.content ?? []).map((dto: any) => Role.fromDTO(dto))
+        const response = await UserService.getUserRoles(userUuid, {
+          ...params,
+          page,
+          size,
+        })
+        const roles = (response.content ?? []).map((dto: any) =>
+          Role.fromDTO(dto),
+        )
 
         pagesForUser[page] = roles
         this.userRolesPagesByUser[userUuid] = pagesForUser
@@ -449,7 +525,7 @@ export const useUserStore = defineStore('user', {
           totalSize: response.total,
           totalPages: Math.ceil(response.total / size),
           currentPage: response.page,
-          pageSize: response.size
+          pageSize: response.size,
         }
       } catch (e: any) {
         this.error = 'Erro ao buscar roles do utilizador'
@@ -464,14 +540,21 @@ export const useUserStore = defineStore('user', {
       userUuid: string,
       roleUuids: string[],
       programActivityUuid?: string | null,
-      opts: { refresh?: boolean } = { refresh: true }
+      opts: { refresh?: boolean } = { refresh: true },
     ) {
       this.error = null
       try {
-        const data = await UserService.assignRoles(userUuid, { roleUuids, programActivityUuid: programActivityUuid ?? null })
+        const data = await UserService.assignRoles(userUuid, {
+          roleUuids,
+          programActivityUuid: programActivityUuid ?? null,
+        })
         if (opts.refresh) {
-          await this.fetchUserServiceRoles(userUuid, { page: this.userServiceRolePagination.currentPage })
-          await this.fetchUserRoles(userUuid, { page: this.userRolesPagination.currentPage })
+          await this.fetchUserServiceRoles(userUuid, {
+            page: this.userServiceRolePagination.currentPage,
+          })
+          await this.fetchUserRoles(userUuid, {
+            page: this.userRolesPagination.currentPage,
+          })
         }
         return data
       } catch (e: any) {
@@ -486,14 +569,21 @@ export const useUserStore = defineStore('user', {
       userUuid: string,
       roleUuids: string[],
       programActivityUuid?: string | null,
-      opts: { refresh?: boolean } = { refresh: true }
+      opts: { refresh?: boolean } = { refresh: true },
     ) {
       this.error = null
       try {
-        const data = await UserService.replaceRoles(userUuid, { roleUuids, programActivityUuid: programActivityUuid ?? null })
+        const data = await UserService.replaceRoles(userUuid, {
+          roleUuids,
+          programActivityUuid: programActivityUuid ?? null,
+        })
         if (opts.refresh) {
-          await this.fetchUserServiceRoles(userUuid, { page: this.userServiceRolePagination.currentPage })
-          await this.fetchUserRoles(userUuid, { page: this.userRolesPagination.currentPage })
+          await this.fetchUserServiceRoles(userUuid, {
+            page: this.userServiceRolePagination.currentPage,
+          })
+          await this.fetchUserRoles(userUuid, {
+            page: this.userRolesPagination.currentPage,
+          })
         }
         return data
       } catch (e: any) {
@@ -508,14 +598,18 @@ export const useUserStore = defineStore('user', {
       userUuid: string,
       roleUuid: string,
       programActivityUuid?: string,
-      opts: { refresh?: boolean } = { refresh: true }
+      opts: { refresh?: boolean } = { refresh: true },
     ) {
       this.error = null
       try {
         await UserService.removeRole(userUuid, roleUuid, programActivityUuid)
         if (opts.refresh) {
-          await this.fetchUserServiceRoles(userUuid, { page: this.userServiceRolePagination.currentPage })
-          await this.fetchUserRoles(userUuid, { page: this.userRolesPagination.currentPage })
+          await this.fetchUserServiceRoles(userUuid, {
+            page: this.userServiceRolePagination.currentPage,
+          })
+          await this.fetchUserRoles(userUuid, {
+            page: this.userRolesPagination.currentPage,
+          })
         }
       } catch (e: any) {
         this.error = e?.response?.data?.message || 'Erro ao remover role'
@@ -535,7 +629,9 @@ export const useUserStore = defineStore('user', {
       }
     },
 
-    async validateImport(rows: ImportRowPayload[]): Promise<ValidateImportResult> {
+    async validateImport(
+      rows: ImportRowPayload[],
+    ): Promise<ValidateImportResult> {
       // Nota: não uso this.loading para não interferir na tabela principal
       this.error = null
       try {
@@ -546,7 +642,9 @@ export const useUserStore = defineStore('user', {
         if (!out.errors) return { errors: [] }
         return out
       } catch (e: any) {
-        this.error = e?.response?.data?.message || 'Erro ao validar importação de utilizadores'
+        this.error =
+          e?.response?.data?.message ||
+          'Erro ao validar importação de utilizadores'
         console.error('validateImport error:', e)
         throw e
       }
@@ -556,31 +654,61 @@ export const useUserStore = defineStore('user', {
      * Espera um array de objetos com os campos do import.
      * Após importar, limpa o cache e atualiza a primeira página.
      */
-    async importUsersBulk(rows: Array<{
-      name: string
-      surname: string
-      username: string
-      integratedSystem?: string | null
-      idOnIntegratedSystem?: string | null
-      email?: string | null
-      phone?: string | null
-    }>) {
+    async importUsersBulk(
+      rows: Array<{
+        name: string
+        surname: string
+        username: string
+        integratedSystem?: string | null
+        idOnIntegratedSystem?: string | null
+        email?: string | null
+        phone?: string | null
+      }>,
+    ) {
       this.error = null
       this.loading = true
       try {
         const res = await UserService.import(rows) // POST /users/import (ajusta no service se necessário)
         // Limpa caches e atualiza a listagem
         this.usersPages = {}
-        await this.fetchUsers({ page: 0, size: this.pagination.pageSize, ignoreCache: true })
+        await this.fetchUsers({
+          page: 0,
+          size: this.pagination.pageSize,
+          ignoreCache: true,
+        })
         return res
       } catch (e: any) {
-        this.error = e?.response?.data?.message || 'Erro ao importar utilizadores'
+        this.error =
+          e?.response?.data?.message || 'Erro ao importar utilizadores'
         console.error(e)
         throw e
       } finally {
         this.loading = false
       }
-    }
+    },
 
-  }
+    async fetchFocalPointUsers(forceReload = false) {
+      // Se já carregamos e não for um reload, retorna cache
+      if (this.volunteerUsersLoaded && !forceReload) {
+        return this.volunteerUsers
+      }
+
+      this.loading = true
+      this.error = null
+      try {
+        const response = await UserService.getFocalPointUsers()
+        const users = (response.data ?? []).map((dto: any) => User.fromDTO(dto))
+
+        this.volunteerUsers = users
+        this.volunteerUsersLoaded = true
+        return users
+      } catch (error: any) {
+        this.error = 'Erro ao buscar Focal Points'
+        console.error(error)
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+  },
 })

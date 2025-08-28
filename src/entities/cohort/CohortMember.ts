@@ -2,7 +2,9 @@ import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm'
 import { BaseEntity } from '../base/BaseEntity'
 import { Cohort } from './Cohort'
 import { Patient } from '../patient/Patient' // ajuste o caminho conforme necessário
-import { CohortMemberSource } from '../source/CohortMemberSource' // ajuste conforme sua estrutura
+import { SourceSystem } from '../source/SourceSystem'
+import { Group } from '../group/Group'
+import { User } from '../user/User'
 
 @Entity('cohort_members')
 export class CohortMember extends BaseEntity {
@@ -14,12 +16,23 @@ export class CohortMember extends BaseEntity {
   @JoinColumn({ name: 'patient_id' })
   patient!: Patient
 
-  @ManyToOne(() => CohortMemberSource)
-  @JoinColumn({ name: 'cohort_member_source_id' })
-  sourceType!: CohortMemberSource
+  @ManyToOne(() => Group, { nullable: false })
+  @JoinColumn({ name: 'group_id' })
+  group!: Group
+
+  @ManyToOne(() => SourceSystem)
+  @JoinColumn({ name: 'source_system_id' })
+  sourceSystem!: SourceSystem
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'assigned_by_user_id' })
+  assignedByUser!: User
 
   @Column('text', { nullable: true })
   originId!: string | null
+
+  @Column('text', { nullable: true })
+  sourceType!: string | null
 
   @Column({ type: 'date', name: 'inclusion_date', nullable: true })
   inclusionDate!: Date | null
@@ -46,13 +59,22 @@ export class CohortMember extends BaseEntity {
     if (dto.updatedAt !== undefined) entity.updatedAt = new Date(dto.updatedAt)
     if (dto.lifeCycleStatus !== undefined)
       entity.lifeCycleStatus = dto.lifeCycleStatus
+    if (dto.sourceType !== undefined) entity.sourceType = dto.sourceType
 
-    // Entity-specific fields
-    if (dto.cohort?.id) entity.cohort = new Cohort({ id: dto.cohort.id })
-    if (dto.patient?.id) entity.patient = new Patient({ id: dto.patient.id })
-    if (dto.sourceType?.id)
-      entity.sourceType = new CohortMemberSource({ id: dto.sourceType.id })
+    // Relations
+    entity.cohort = dto.cohort ? Cohort.fromDTO(dto.cohort) : (undefined as any)
+    entity.patient = dto.patient
+      ? Patient.fromDTO(dto.patient)
+      : (undefined as any)
+    entity.sourceSystem = dto.sourceSystem
+      ? SourceSystem.fromDTO(dto.sourceSystem)
+      : (undefined as any)
+    entity.group = dto.group ? Group.fromDTO(dto.group) : (undefined as any)
+    entity.assignedByUser = dto.assignedByUser
+      ? User.fromDTO(dto.assignedByUser)
+      : (undefined as any)
 
+    // Outros campos
     entity.originId = dto.originId ?? null
     entity.inclusionDate = dto.inclusionDate
       ? new Date(dto.inclusionDate)
@@ -60,6 +82,8 @@ export class CohortMember extends BaseEntity {
     entity.exclusionDate = dto.exclusionDate
       ? new Date(dto.exclusionDate)
       : null
+
+    console.log('CohortMember entity created:', entity)
 
     return entity
   }
@@ -73,6 +97,7 @@ export class CohortMember extends BaseEntity {
       updatedBy: this.updatedBy ?? null,
       updatedAt: this.updatedAt?.toISOString() ?? null,
       lifeCycleStatus: this.lifeCycleStatus,
+      sourceType: this.sourceType,
 
       cohort: this.cohort
         ? { id: this.cohort.id, uuid: this.cohort.uuid }
@@ -80,8 +105,13 @@ export class CohortMember extends BaseEntity {
       patient: this.patient
         ? { id: this.patient.id, uuid: this.patient.uuid }
         : null,
-      sourceType: this.sourceType
-        ? { id: this.sourceType.id, uuid: this.sourceType.uuid }
+      sourceSystem: this.sourceSystem
+        ? { id: this.sourceSystem.id, uuid: this.sourceSystem.uuid }
+        : null,
+
+      group: this.group ? { id: this.group.id, uuid: this.group.uuid } : null,
+      assignedByUser: this.assignedByUser
+        ? { id: this.assignedByUser.id, uuid: this.assignedByUser.uuid }
         : null,
 
       originId: this.originId,
