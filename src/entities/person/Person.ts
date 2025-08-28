@@ -75,6 +75,10 @@ export class Person extends BaseEntity {
 
 
   toDTO(): any {
+    // ✅ 1) chama primeiro o super (BaseEntity)
+    const base = super.getBaseDTO()
+
+    // 2) pega preferred name/address (com fallback)
     const preferedName =
       this.names?.find((n: any) => n?.prefered) ??
       this.names?.[0] ?? {}
@@ -84,32 +88,26 @@ export class Person extends BaseEntity {
       this.address?.[0] ?? {}
 
     const firstName = preferedName.firstName ?? ''
-    const lastName = preferedName.lastName ?? ''
+    const lastName  = preferedName.lastName ?? ''
 
     const addressLine1 = preferedAddress.addressLine1 ?? ''
-    const city = preferedAddress.city ?? ''
+    const city     = preferedAddress.city ?? ''
     const district = preferedAddress.district ?? ''
     const province = preferedAddress.province ?? ''
 
-    // guarantees arrays
+    // garante array
     const asArray = (v: any, fallback: any[] = []) =>
       Array.isArray(v) ? v : (v ? [v] : fallback)
 
+    // 3) retorna o DTO final, começando pelo base
     return {
-      // BaseEntity
-      id: this.id,
-      uuid: this.uuid,
-      createdBy: this.createdBy,
-      createdAt: this.createdAt?.toISOString() ?? null,
-      updatedBy: this.updatedBy ?? null,
-      updatedAt: this.updatedAt?.toISOString() ?? null,
-      lifeCycleStatus: this.lifeCycleStatus,
+      ...base, // id, uuid, lifeCycleStatus
 
-      // Preferred Name (flat de conveniência)
+      // Preferred Name (flat)
       firstName,
       lastName,
 
-      // 👇 Exporta o que está na entidade (que veio da API), com fallback
+      // fullName: prioriza o já calculado; senão monta
       fullName: this.fullName ?? Person.buildFullNameFromNames(this.names),
 
       // Preferred Address (flat)
@@ -119,12 +117,12 @@ export class Person extends BaseEntity {
       province,
       fullAddress: Person.buildFullAddressFromAddress(this.address) ?? '',
 
-      // JSON arrays (ensure arrays)
+      // JSON arrays
       names: asArray(this.names, []),
       address: asArray(this.address, []),
       personAttributes: asArray(this.personAttributes, []),
 
-      // Other person fields
+      // outros campos
       sex: this.sex,
       birthdate: this.birthdate
         ? new Date(this.birthdate).toISOString().slice(0, 10)

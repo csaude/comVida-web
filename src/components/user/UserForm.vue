@@ -22,10 +22,10 @@
         </div>
 
         <!-- Username / Password -->
-        <div class="row q-gutter-md q-mb-md">
-          <q-input v-model="user.username" label="Username" class="col-5" outlined dense />
-          <q-input v-model="user.password" type="password" label="Password" class="col-3" outlined dense />
-          <q-input v-model="passwordConfirm" type="password" label="Confirme a Password" class="col" outlined dense />
+        <div class="row q-gutter-md q-mb-md " :class="isEdit ? 'q-pr-md' : ''">
+          <q-input v-model="user.username" label="Username" :class="isEdit ? 'col-12' : 'col-5'" outlined dense />
+          <q-input v-model="user.password" type="password" label="Password" v-if="!isEdit" class="col-3" outlined dense />
+          <q-input v-model="passwordConfirm" type="password" label="Confirme a Password" v-if="!isEdit" class="col" outlined dense />
         </div>
 
         <!-- Toggle Sistema Integrado -->
@@ -62,13 +62,17 @@
 
         <!-- Perfis/Permissões (UI rows) -->
         <div class="q-mt-lg">
-          <UserRolesTable v-model="user.roles" />
+          <UserRolesTable v-model="user.roles" @editing-change="isTableEditing = $event" />
         </div>
       </q-card-section>
 
       <q-card-actions align="right" class="q-pb-md q-pr-md">
         <q-btn label="Cancelar" color="red" outlined @click="$emit('cancel')" />
-        <q-btn label="Gravar" type="submit" color="primary" :loading="saving" :disable="saving" />
+        <q-btn label="Gravar" type="submit" color="primary" :loading="saving" :disable="saving || isTableEditing" >
+            <q-tooltip v-if="isTableEditing" class="bg-primary">
+            Termine a edição dos perfis antes de gravar.
+          </q-tooltip>
+        </q-btn>
       </q-card-actions>
     </q-form>
   </q-card>
@@ -109,13 +113,16 @@ const emit = defineEmits<{
   (e: 'cancel'): void
 }>()
 
+const isEdit = computed(() => !!user.value.id || !!user.value.uuid)
 const userStore = useUserStore()
-const groupStore = useGroupStore()                // ⬅️ NEW
+const groupStore = useGroupStore()                
 const { alertSucess, alertError } = useSwal()
 const { handleApiError } = useApiErrorHandler()
+const isTableEditing = ref(false)
 
 const user = ref<{
   id: number | null
+  uuid: string | null           
   name: string
   surname: string
   username: string
@@ -125,6 +132,7 @@ const user = ref<{
   roles: RoleRow[]
 }>({
   id: null,
+  uuid: null,                    
   name: '',
   surname: '',
   username: '',
@@ -133,6 +141,7 @@ const user = ref<{
   idOnIntegratedSystem: '',
   roles: []
 })
+
 
 const passwordConfirm = ref('')
 const usesIntegratedSystem = ref(false)
@@ -316,6 +325,7 @@ watch(
 
       user.value = {
         id: val.id ?? null,
+        uuid: val.uuid ?? null,        
         name: val.name ?? val.firstName ?? '',
         surname: val.surname ?? val.lastName ?? '',
         username: val.username ?? '',
@@ -325,6 +335,7 @@ watch(
         roles
       }
 
+
       usesIntegratedSystem.value = !!att
       passwordConfirm.value = ''
 
@@ -333,6 +344,7 @@ watch(
     } else {
       user.value = {
         id: null,
+        uuid: null,                   
         name: '',
         surname: '',
         username: '',
@@ -341,6 +353,7 @@ watch(
         idOnIntegratedSystem: '',
         roles: []
       }
+
       usesIntegratedSystem.value = false
       passwordConfirm.value = ''
     }
@@ -350,6 +363,11 @@ watch(
 
 /** Enviar */
 const submitForm = async () => {
+  if (isTableEditing.value) {
+    alertError('Termine a edição dos perfis antes de gravar.')
+    return
+  }
+
   if (!user.value.username?.trim()) {
     alertError('Informe o Username.')
     return
@@ -388,27 +406,42 @@ const submitForm = async () => {
     })
   }
 
+
   const payload: any = {
     id: user.value.id ?? null,
+    ...(isEdit.value && user.value.uuid ? { uuid: user.value.uuid } : {}),
     username: user.value.username?.trim(),
     ...(user.value.password ? { password: user.value.password } : {}),
     status: 'ACTIVE',
     shouldResetPassword: false,
     salt: null,
 
-    names,
+    names: [
+      {
+        prefered: true,
+        firstName: (user.value.name || '').trim(),
+        lastName: (user.value.surname || '').trim()
+      }
+    ],
     address: [],
     personAttributes: [],
 
-    attributes,
+    attributes: usesIntegratedSystem.value
+      ? [{
+          type: 'integratedSystem',
+          integratedSystemName: getSystemNameById(user.value.integratedSystem),
+          idOnIntegratedSystem: user.value.idOnIntegratedSystem
+        }]
+      : [],
 
     userServiceRoles: userServiceRoles.value
   }
 
+
   try {
     saving.value = true
     await userStore.saveUser(payload)
-    await alertSucess('Utilizador salvo com sucesso.')
+    await alertSucess('Utilizador gravado com sucesso.')
     emit('close')
   } catch (err: any) {
     handleApiError(err, 'Erro ao salvar utilizador')

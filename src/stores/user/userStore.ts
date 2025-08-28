@@ -241,32 +241,65 @@ export const useUserStore = defineStore('user', {
     async saveUser(userData: Partial<User>) {
       this.error = null
       try {
+        // 1) Monta dto e detecta se é criação
         const dtoToSend =
           userData instanceof User ? userData.toDTO() : new User(userData).toDTO()
+        const isNew = !dtoToSend.id
 
-          console.log('Saving user data:', dtoToSend)
-          
-        const savedDto = dtoToSend.id
-          ? await UserService.update(dtoToSend)
-          : await UserService.save(dtoToSend)
+        console.log('Saving user data:', dtoToSend)
 
+        // 2) Chama API e desembrulha payload (SuccessResponse { data })
+        const apiResp = isNew
+          ? await UserService.save(dtoToSend)
+          : await UserService.update(dtoToSend)
+
+        const savedDto = apiResp?.data ?? apiResp
+        console.log('User saved (raw):', savedDto)
+
+        // 3) Mapeia para entidade
         const saved = User.fromDTO(savedDto)
+        console.log('User entity created:', saved)
 
-        const page = this.pagination.currentPage
-        if (this.usersPages[page]) {
-          const index = this.usersPages[page].findIndex(u => u.id === saved.id)
-          if (index !== -1) this.usersPages[page][index] = saved
-          else this.usersPages[page].push(saved)
-          this.currentPageUsers = this.usersPages[page]
+        // 4) Helpers reativos
+        const replaceOrInsert = (arr?: User[]) => {
+          if (!Array.isArray(arr)) return false
+          const idx = arr.findIndex(u => u?.uuid === saved.uuid)
+          if (idx >= 0) {
+            arr.splice(idx, 1, saved)   // garante reatividade
+            return false                // já existia (edição)
+          } else {
+            arr.unshift(saved)          // novo registro entra no topo
+            return true                 // inseriu novo
+          }
         }
 
+        // 5) Atualiza TODAS as páginas cacheadas
+        let insertedSomewhere = false
+        for (const key of Object.keys(this.usersPages)) {
+          insertedSomewhere = replaceOrInsert(this.usersPages[key]) || insertedSomewhere
+        }
+
+        // 6) Atualiza SEMPRE a página atual na UI
+        insertedSomewhere = replaceOrInsert(this.currentPageUsers) || insertedSomewhere
+        // força reatividade de quem observa o array
+        this.currentPageUsers = [...this.currentPageUsers]
+
+        // 7) Ajusta paginação se foi criação e inserimos na lista
+        if (isNew && insertedSomewhere) {
+          this.pagination.totalSize += 1
+          this.pagination.totalPages = Math.ceil(this.pagination.totalSize / this.pagination.pageSize)
+        }
+
+        // 8) Seleção atual
         this.currentUser = saved
+        return saved
       } catch (error: any) {
         this.error = 'Erro ao salvar usuário'
         console.error(error.response?.data || error.message || error)
         throw error
       }
-    },
+    }
+    ,
 
     async updateUserLifeCycleStatus(uuid: string, lifeCycleStatus: string) {
       this.error = null
@@ -289,22 +322,56 @@ export const useUserStore = defineStore('user', {
       }
     },
 
-    async deleteUser(uuid: string) {
+    async deleteUser(uuid: string, opts: { name?: string } = {}) {
       this.error = null
       try {
         await UserService.delete(uuid)
-        for (const page in this.usersPages) {
-          this.usersPages[page] = this.usersPages[page].filter(u => u.uuid !== uuid)
+
+        // 1) Remove dos caches e da página atual
+        let removedSomewhere = false
+        for (const pageKey of Object.keys(this.usersPages)) {
+          const before = this.usersPages[pageKey].length
+          this.usersPages[pageKey] = this.usersPages[pageKey].filter(u => u.uuid !== uuid)
+          if (this.usersPages[pageKey].length !== before) removedSomewhere = true
         }
-        this.currentPageUsers = this.usersPages[this.pagination.currentPage] ?? []
+
+        // Reaponta a página atual para o cache se existir; senão, filtra localmente
+        const cached = this.usersPages[this.pagination.currentPage]
+        this.currentPageUsers = cached ? cached : this.currentPageUsers.filter(u => u.uuid !== uuid)
+
         if (this.currentUser?.uuid === uuid) this.currentUser = null
+
+        // 2) Atualiza a paginação local (sabemos que apagou no servidor)
+        this.pagination.totalSize = Math.max(0, (this.pagination.totalSize || 0) - 1)
+        this.pagination.totalPages = this.pagination.pageSize > 0
+          ? Math.ceil(this.pagination.totalSize / this.pagination.pageSize)
+          : 0
+
+        // 3) Se a página atual ficou inválida (ex.: caiu de 3 para 2), recua
+        if (this.pagination.currentPage >= this.pagination.totalPages && this.pagination.totalPages > 0) {
+          this.pagination.currentPage = this.pagination.totalPages - 1
+        }
+
+        // 4) Se a página atual está vazia, tenta recuar uma página
+        if (this.currentPageUsers.length === 0 && this.pagination.currentPage > 0) {
+          this.pagination.currentPage -= 1
+        }
+
+        // 5) Refresh do servidor para garantir consistência
+        await this.fetchUsers({
+          page: this.pagination.currentPage,
+          size: this.pagination.pageSize,
+          name: opts.name ?? '',
+          ignoreCache: true
+        })
       } catch (error: any) {
         const apiMessage = error?.response?.data?.message || 'Erro ao apagar usuário'
         this.error = apiMessage
         console.error(error)
         throw error
       }
-    },
+    }
+    ,
 
     // ==========================================
     // NEW: Roles do utilizador (via UserController)
@@ -455,6 +522,65 @@ export const useUserStore = defineStore('user', {
         console.error(e)
         throw e
       }
+    },
+
+    async updateUserPassword(uuid: string, newPassword: string) {
+      this.error = null
+      try {
+        await UserService.updatePassword(uuid, newPassword)
+      } catch (error: any) {
+        this.error = 'Erro ao atualizar senha do utilizador'
+        console.error(error)
+        throw error
+      }
+    },
+
+    async validateImport(rows: ImportRowPayload[]): Promise<ValidateImportResult> {
+      // Nota: não uso this.loading para não interferir na tabela principal
+      this.error = null
+      try {
+        const result = await UserService.validateImport(rows)
+        // O service já faz: resp.data?.data ?? resp.data
+        // Garantimos a forma { errors: [...] }
+        const out = (result ?? {}) as ValidateImportResult
+        if (!out.errors) return { errors: [] }
+        return out
+      } catch (e: any) {
+        this.error = e?.response?.data?.message || 'Erro ao validar importação de utilizadores'
+        console.error('validateImport error:', e)
+        throw e
+      }
+    },
+    /**
+     * Importa utilizadores em lote.
+     * Espera um array de objetos com os campos do import.
+     * Após importar, limpa o cache e atualiza a primeira página.
+     */
+    async importUsersBulk(rows: Array<{
+      name: string
+      surname: string
+      username: string
+      integratedSystem?: string | null
+      idOnIntegratedSystem?: string | null
+      email?: string | null
+      phone?: string | null
+    }>) {
+      this.error = null
+      this.loading = true
+      try {
+        const res = await UserService.import(rows) // POST /users/import (ajusta no service se necessário)
+        // Limpa caches e atualiza a listagem
+        this.usersPages = {}
+        await this.fetchUsers({ page: 0, size: this.pagination.pageSize, ignoreCache: true })
+        return res
+      } catch (e: any) {
+        this.error = e?.response?.data?.message || 'Erro ao importar utilizadores'
+        console.error(e)
+        throw e
+      } finally {
+        this.loading = false
+      }
     }
+
   }
 })

@@ -15,6 +15,7 @@ export const useSourceSystemStore = defineStore('sourceSystem', {
       currentPage: 0,
       pageSize: 100,
     },
+    integratedSystemOptions: [] as Array<{ label: string; value: number | string }>,
   }),
 
   actions: {
@@ -191,5 +192,89 @@ export const useSourceSystemStore = defineStore('sourceSystem', {
         throw error
       }
     },
+    /**
+     * Busca TODAS as páginas de SourceSystems e devolve um array plano.
+     * Usa paginação grande por default para reduzir chamadas.
+     */
+    async getAllSourceSystemsAcrossPages(
+      { name = '', size = 500 }: { name?: string; size?: number } = {}
+    ) {
+      // 1ª página para saber o total
+      await this.fetchSourceSystems({ page: 0, size, name, ignoreCache: true })
+      const first = [...this.currentPageSourceSystems]
+      const total = this.pagination.totalSize || first.length
+      const totalPages = Math.max(1, Math.ceil(total / size))
+
+      // Demais páginas
+      const rest: SourceSystem[] = []
+      for (let p = 1; p < totalPages; p++) {
+        await this.fetchSourceSystems({ page: p, size, name, ignoreCache: true })
+        rest.push(...this.currentPageSourceSystems)
+      }
+
+      return [...first, ...rest]
+    },
+
+    /**
+     * Devolve a lista de nomes permitidos para "Sistema Integrado",
+     * já deduplicada, ordenada e (opcional) incluindo string vazia.
+     */
+    async listAllowedSourceSystemNames(
+      { includeEmpty = true, includeInactive = false }:
+      { includeEmpty?: boolean; includeInactive?: boolean } = {}
+    ): Promise<string[]> {
+      const all = await this.getAllSourceSystemsAcrossPages({ size: 1000 })
+      const names = Array.from(new Set(
+        all
+          .filter(ss => includeInactive ? true : (ss.lifeCycleStatus ?? 'ACTIVE') !== 'INACTIVE')
+          .map(ss => (ss.code ?? '').trim())
+          .filter(Boolean)
+      )).sort((a, b) => a.localeCompare(b))
+
+      return includeEmpty ? ['',
+        ...names
+      ] : names
+    },
+    /**
+     * Carrega opções para o select "Sistema Integrado".
+     * valueField: 'id' | 'uuid' | 'code'  (escolhe 1 e mantém consistente no teu formulário)
+     */
+    async loadIntegratedSystemOptions(
+      {
+        valueField = 'id',
+        includeEmpty = true,
+        includeInactive = false,
+      }: { valueField?: 'id' | 'uuid' | 'code'; includeEmpty?: boolean; includeInactive?: boolean } = {}
+    ) {
+      const all = await this.getAllSourceSystemsAcrossPages({ size: 1000 })
+
+      const map = new Map<string, { label: string; value: any }>()
+      for (const ss of all) {
+        if (!includeInactive && (ss.lifeCycleStatus ?? 'ACTIVE') === 'INACTIVE') continue
+        const value = (ss as any)[valueField]
+        if (value == null) continue
+
+        const label = ss.description
+          ? `${ss.code} — ${ss.description}`
+          : `${ss.code}`
+
+        map.set(String(value), { label, value })
+      }
+
+      const opts = Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label))
+      this.integratedSystemOptions = includeEmpty ? [{ label: '', value: '' }, ...opts] : opts
+      return this.integratedSystemOptions
+    },
+
+    /**
+     * Devolve o label legível a partir de um value (para formatar célula quando não está editando)
+     */
+    integratedSystemLabelFrom(value: any) {
+      const hit = this.integratedSystemOptions.find(o => o.value === value)
+      return hit ? hit.label : (value ?? '')
+    },
+
   },
+  
+  
 })
